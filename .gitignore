@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+dist/
+build/
+*.so
+.DS_Store
+cache/
+*.geojson
+*.tif
+*.png
+!tests/fixtures/
