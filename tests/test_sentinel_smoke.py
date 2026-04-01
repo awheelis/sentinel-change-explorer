@@ -4,7 +4,6 @@
 Requires internet access and unsigned S3 access (no AWS creds needed).
 Run with: pytest tests/test_sentinel_smoke.py -v -s
 """
-import pytest
 import numpy as np
 from src.sentinel import search_scenes, load_bands
 
@@ -43,5 +42,5 @@ def test_load_bands_returns_numpy_arrays():
     for k, arr in bands.items():
         assert isinstance(arr, np.ndarray), f"{k} should be ndarray"
         assert arr.ndim == 2, f"{k} should be 2D"
-        assert arr.dtype in (np.uint16, np.float32, np.float64)
+        assert arr.dtype == np.uint16, f"{k} expected uint16 dtype, got {arr.dtype}"
     print(f"\nBand shapes: { {k: v.shape for k, v in bands.items()} }")

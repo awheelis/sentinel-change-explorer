@@ -9,7 +9,6 @@ Earth Search v1 asset keys for sentinel-2-l2a (confirmed):
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import numpy as np
@@ -113,25 +112,26 @@ def load_bands(
     arrays: dict[str, np.ndarray] = {}
 
     with rasterio.Env(**_RASTERIO_ENV):
-        # Determine output shape from the first band, reprojecting bbox to
-        # the dataset's native CRS if needed (Sentinel-2 is typically in UTM).
-        ref_key = band_keys[0]
-        with rasterio.open(assets[ref_key]) as ref_ds:
+        # Determine output shape and CRS from the reference (first) band
+        with rasterio.open(assets[band_keys[0]]) as ref_ds:
             dst_crs = ref_ds.crs
-            # Reproject bbox from WGS84 to native CRS
             native_bounds = transform_bounds("EPSG:4326", dst_crs, west, south, east, north)
             win = from_bounds(*native_bounds, ref_ds.transform)
             native_res_m = ref_ds.res[0]  # meters per pixel (approximate)
-            scale = native_res_m / target_res if target_res else 1.0
+            if target_res <= 0:
+                raise ValueError(f"target_res must be positive, got {target_res}")
+            scale = native_res_m / target_res
             out_h = max(1, int(round(win.height * scale)))
             out_w = max(1, int(round(win.width * scale)))
+        # NOTE: output shape is derived from band_keys[0]'s native resolution.
+        # Callers should pass a 10m band (red/green/blue/nir) as band_keys[0]
+        # to get the target_res scaling correct.
 
         for key in band_keys:
             href = assets[key]
             with rasterio.open(href) as ds:
-                dst_crs = ds.crs
-                native_bounds = transform_bounds("EPSG:4326", dst_crs, west, south, east, north)
-                window = from_bounds(*native_bounds, ds.transform)
+                native_bounds_k = transform_bounds("EPSG:4326", dst_crs, west, south, east, north)
+                window = from_bounds(*native_bounds_k, ds.transform)
                 data = ds.read(
                     1,
                     window=window,
