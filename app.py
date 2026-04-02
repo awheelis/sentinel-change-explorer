@@ -37,10 +37,15 @@ INDEX_FUNCTIONS = {
 ALL_BAND_KEYS = ["red", "green", "blue", "nir", "swir16"]
 
 
+@st.cache_data
 def load_presets() -> list[dict]:
     """Load preset locations from config/presets.json."""
-    with open(PRESETS_FILE) as f:
-        return json.load(f)
+    try:
+        with open(PRESETS_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        st.warning(f"Could not load presets: {exc}")
+        return []
 
 
 def compute_index_for_bands(
@@ -79,8 +84,11 @@ def fetch_scene_data(
         return None, None, f"No {label} scenes found with cloud cover < {max_cloud:.0f}%"
 
     scene = scenes[0]
-    with st.spinner(f"Loading {label} bands from S3…"):
-        bands = load_bands(scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10)
+    try:
+        with st.spinner(f"Loading {label} bands from S3…"):
+            bands = load_bands(scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10)
+    except Exception as exc:
+        return None, None, f"Failed to load {label} bands: {exc}"
 
     return scene, bands, f"Loaded {label}: {scene['id']} ({scene['cloud_cover']:.1f}% cloud)"
 
@@ -105,10 +113,23 @@ def main() -> None:
     with st.sidebar:
         st.header("Location & Dates")
 
+        # Initialize widget state on first load
+        if "_last_preset" not in st.session_state:
+            st.session_state["_last_preset"] = None
+            st.session_state["west"] = -115.32
+            st.session_state["east"] = -115.08
+            st.session_state["south"] = 36.08
+            st.session_state["north"] = 36.28
+            from datetime import date as _date
+            st.session_state["before_start"] = _date.fromisoformat("2019-05-01")
+            st.session_state["before_end"] = _date.fromisoformat("2019-07-31")
+            st.session_state["after_start"] = _date.fromisoformat("2023-05-01")
+            st.session_state["after_end"] = _date.fromisoformat("2023-07-31")
+
         preset_choice = st.selectbox("Preset location", preset_names)
         if preset_choice != "Custom…":
             preset = next(p for p in presets if p["name"] == preset_choice)
-            default_bbox = preset["bbox"]  # [W, S, E, N]
+            default_bbox = preset["bbox"]
             default_before_start = preset["before_range"][0]
             default_before_end = preset["before_range"][1]
             default_after_start = preset["after_range"][0]
@@ -122,22 +143,35 @@ def main() -> None:
             default_after_start, default_after_end = "2023-05-01", "2023-07-31"
             default_index = "ndvi"
 
+        # Reset widget values when preset changes
+        if st.session_state.get("_last_preset") != preset_choice:
+            st.session_state["_last_preset"] = preset_choice
+            st.session_state["west"] = float(default_bbox[0])
+            st.session_state["east"] = float(default_bbox[2])
+            st.session_state["south"] = float(default_bbox[1])
+            st.session_state["north"] = float(default_bbox[3])
+            from datetime import date as _date
+            st.session_state["before_start"] = _date.fromisoformat(default_before_start)
+            st.session_state["before_end"] = _date.fromisoformat(default_before_end)
+            st.session_state["after_start"] = _date.fromisoformat(default_after_start)
+            st.session_state["after_end"] = _date.fromisoformat(default_after_end)
+
         st.subheader("Bounding Box (WGS84)")
         col_w, col_e = st.columns(2)
         col_s, col_n = st.columns(2)
-        west = col_w.number_input("West", value=float(default_bbox[0]), format="%.4f")
-        east = col_e.number_input("East", value=float(default_bbox[2]), format="%.4f")
-        south = col_s.number_input("South", value=float(default_bbox[1]), format="%.4f")
-        north = col_n.number_input("North", value=float(default_bbox[3]), format="%.4f")
+        west = col_w.number_input("West", key="west", format="%.4f")
+        east = col_e.number_input("East", key="east", format="%.4f")
+        south = col_s.number_input("South", key="south", format="%.4f")
+        north = col_n.number_input("North", key="north", format="%.4f")
         bbox = (west, south, east, north)
 
         st.subheader("Before Date Range")
-        before_start = st.date_input("Start", value=default_before_start, key="before_start")
-        before_end = st.date_input("End", value=default_before_end, key="before_end")
+        before_start = st.date_input("Start", key="before_start")
+        before_end = st.date_input("End", key="before_end")
 
         st.subheader("After Date Range")
-        after_start = st.date_input("Start", value=default_after_start, key="after_start")
-        after_end = st.date_input("End", value=default_after_end, key="after_end")
+        after_start = st.date_input("Start", key="after_start")
+        after_end = st.date_input("End", key="after_end")
 
         max_cloud = st.slider("Max cloud cover %", 0, 100, 20, step=5)
 
@@ -227,6 +261,8 @@ def main() -> None:
     st.subheader(f"Panel B+C — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
     folium_map = build_folium_map(
         bbox=bbox,
+        before_image=before_img,
+        after_image=after_img,
         heatmap_image=heatmap_img,
         overture_context=overture,
         show_heatmap=True,
