@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Las Vegas Urban Expansion",
+    "description": "Desert scrubland converted to suburban development on the city's western edge (Summerlin/Rhodes Ranch area).",
+    "bbox": [-115.32, 36.08, -115.08, 36.28],
+    "before_range": ["2019-05-01", "2019-07-31"],
+    "after_range": ["2023-05-01", "2023-07-31"],
+    "default_index": "ndbi",
+    "notes": "NDBI highlights new impervious surfaces. Red glow = new construction."
+  },
+  {
+    "name": "Tonga Volcanic Eruption",
+    "description": "Hunga Tonga–Hunga Ha'apai island before and after the January 2022 eruption. Island shape changed dramatically.",
+    "bbox": [-175.45, -20.65, -175.30, -20.50],
+    "before_range": ["2021-10-01", "2021-12-31"],
+    "after_range": ["2022-03-01", "2022-05-31"],
+    "default_index": "ndvi",
+    "notes": "Post-eruption island is smaller. MNDWI shows water extent change."
+  },
+  {
+    "name": "Amazon Deforestation (Rondônia)",
+    "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture along the BR-319 region.",
+    "bbox": [-62.90, -9.60, -62.50, -9.20],
+    "before_range": ["2019-07-01", "2019-09-30"],
+    "after_range": ["2023-07-01", "2023-09-30"],
+    "default_index": "ndvi",
+    "notes": "Strong NDVI loss signal. Best viewed in dry season (Jul-Sep) for cloud-free imagery."
+  },
+  {
+    "name": "Aral Sea Retreat",
+    "description": "Southern Aral Sea (Kazakhstan/Uzbekistan) showing continued water body shrinkage over 5 years.",
+    "bbox": [58.50, 44.80, 59.20, 45.40],
+    "before_range": ["2018-07-01", "2018-09-30"],
+    "after_range": ["2023-07-01", "2023-09-30"],
+    "default_index": "mndwi",
+    "notes": "MNDWI best captures water loss. Blue = water gain, red = water loss (expect red)."
+  },
+  {
+    "name": "Turkish Earthquake (Hatay Province)",
+    "description": "Urban destruction in Hatay Province following the February 6, 2023 earthquake. Collapsed buildings visible in change signal.",
+    "bbox": [36.10, 36.15, 36.40, 36.35],
+    "before_range": ["2022-11-01", "2023-01-31"],
+    "after_range": ["2023-03-01", "2023-04-30"],
+    "default_index": "ndbi",
+    "notes": "NDBI decrease indicates building collapse (rubble scatters differently). Keep cloud cover < 30%."
+  }
+]
