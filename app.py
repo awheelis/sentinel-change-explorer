@@ -125,6 +125,7 @@ def main() -> None:
             st.session_state["before_end"] = _date.fromisoformat("2019-07-31")
             st.session_state["after_start"] = _date.fromisoformat("2023-05-01")
             st.session_state["after_end"] = _date.fromisoformat("2023-07-31")
+            st.session_state["index_choice"] = "ndvi"
 
         preset_choice = st.selectbox("Preset location", preset_names)
         if preset_choice != "Custom…":
@@ -155,6 +156,7 @@ def main() -> None:
             st.session_state["before_end"] = _date.fromisoformat(default_before_end)
             st.session_state["after_start"] = _date.fromisoformat(default_after_start)
             st.session_state["after_end"] = _date.fromisoformat(default_after_end)
+            st.session_state["index_choice"] = default_index
 
         st.subheader("Bounding Box (WGS84)")
         col_w, col_e = st.columns(2)
@@ -180,7 +182,7 @@ def main() -> None:
             "Change index",
             options=list(INDEX_FUNCTIONS.keys()),
             format_func=lambda k: INDEX_FUNCTIONS[k][0],
-            index=list(INDEX_FUNCTIONS.keys()).index(default_index),
+            key="index_choice",
         )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
 
@@ -192,6 +194,14 @@ def main() -> None:
             "Select a preset location or enter custom coordinates, choose date ranges, "
             "and click **Analyze Change** to begin."
         )
+        return
+
+    # Validate bbox inputs
+    if west >= east:
+        st.error(f"West ({west:.4f}) must be less than East ({east:.4f}).")
+        return
+    if south >= north:
+        st.error(f"South ({south:.4f}) must be less than North ({north:.4f}).")
         return
 
     before_range = f"{before_start}/{before_end}"

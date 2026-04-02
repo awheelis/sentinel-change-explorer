@@ -13,7 +13,7 @@ from typing import Optional
 
 import folium
 import geopandas as gpd
-import matplotlib.cm as cm
+import matplotlib
 import matplotlib.colors as mcolors
 import numpy as np
 from PIL import Image
@@ -90,8 +90,8 @@ def index_to_rgba(
 
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax, clip=True)
     try:
-        cmap = cm.get_cmap(colormap)
-    except ValueError as exc:
+        cmap = matplotlib.colormaps[colormap]
+    except KeyError as exc:
         raise ValueError(f"Invalid colormap '{colormap}'") from exc
     rgba = cmap(norm(delta))  # shape (H, W, 4), values 0-1
 
