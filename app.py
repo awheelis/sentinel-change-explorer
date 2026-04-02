@@ -204,6 +204,29 @@ def main() -> None:
         st.error(f"South ({south:.4f}) must be less than North ({north:.4f}).")
         return
 
+    # ── Memory guard: estimate pixel count and abort if bbox is too large ──
+    bbox_width_deg = east - west
+    bbox_height_deg = north - south
+    center_lat = (south + north) / 2.0
+    target_res = 10  # metres — must match fetch_scene_data
+    pixels_per_band = (
+        bbox_width_deg * bbox_height_deg
+        * math.cos(math.radians(center_lat))
+        * (111_000 / target_res) ** 2
+    )
+    num_bands = len(ALL_BAND_KEYS)  # 5
+    num_dates = 2  # before + after
+    bytes_per_pixel = 2  # uint16
+    estimated_mb = pixels_per_band * num_bands * num_dates * bytes_per_pixel / (1024 ** 2)
+    max_mb = 500
+    if estimated_mb > max_mb:
+        st.error(
+            f"**Bounding box too large** — estimated memory usage is "
+            f"{estimated_mb:,.0f} MB ({max_mb} MB limit). "
+            f"Please shrink your bounding box and try again."
+        )
+        return
+
     before_range = f"{before_start}/{before_end}"
     after_range = f"{after_start}/{after_end}"
 
