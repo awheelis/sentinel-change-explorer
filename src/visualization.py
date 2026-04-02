@@ -39,6 +39,16 @@ def true_color_image(
     Returns:
         RGB PIL Image sized to match the input arrays.
     """
+    if not (red.shape == green.shape == blue.shape):
+        raise ValueError(
+            f"Band shapes must match: red={red.shape}, green={green.shape}, blue={blue.shape}"
+        )
+
+    if percentile_clip[0] >= percentile_clip[1]:
+        raise ValueError(
+            f"percentile_clip must be (low, high), got {percentile_clip}"
+        )
+
     stack = np.stack([red, green, blue], axis=-1).astype(np.float32)
 
     lo = np.percentile(stack, percentile_clip[0])
@@ -75,8 +85,14 @@ def index_to_rgba(
     Returns:
         RGBA PIL Image sized to match the input array.
     """
+    if vmin >= vmax:
+        raise ValueError(f"vmin ({vmin}) must be less than vmax ({vmax})")
+
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax, clip=True)
-    cmap = cm.get_cmap(colormap)
+    try:
+        cmap = cm.get_cmap(colormap)
+    except ValueError as exc:
+        raise ValueError(f"Invalid colormap '{colormap}'") from exc
     rgba = cmap(norm(delta))  # shape (H, W, 4), values 0-1
 
     # Make near-zero pixels transparent
