@@ -14,3 +14,4 @@ cache/
 *.tif
 *.png
 !tests/fixtures/
+raw-assignment-email*

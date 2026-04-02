@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/alex_wheelis/Desktop/sentinel-change-explorer/src /Users/alex_wheelis/Desktop/sentinel-change-explorer/config /Users/alex_wheelis/Desktop/sentinel-change-explorer/tests)",
+      "Bash(touch /Users/alex_wheelis/Desktop/sentinel-change-explorer/src/__init__.py /Users/alex_wheelis/Desktop/sentinel-change-explorer/tests/__init__.py)",
+      "Bash(cp /Users/alex_wheelis/Desktop/planet-interview/SPEC-phase1-sentinel-change-explorer.md /Users/alex_wheelis/Desktop/sentinel-change-explorer/)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(/Users/alex_wheelis/Desktop/sentinel-change-explorer/.venv/bin/overturemaps --help)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(python -m pytest tests/test_indices.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/test_overture_smoke.py --collect-only)"
+    ]
+  }
+}
