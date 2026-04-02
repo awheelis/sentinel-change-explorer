@@ -1,0 +1,74 @@
+# Sentinel-2 Change Detection Explorer
+
+A Streamlit application that lets you visually compare two dates of Sentinel-2
+satellite imagery for any location on Earth — detecting vegetation loss,
+urbanization, and water change using spectral indices. Overture Maps building
+footprints, roads, and POIs provide ground-truth context.
+
+## What It Does
+
+1. **Choose a location** — 5 curated presets (Amazon deforestation, Las Vegas
+   sprawl, Tonga eruption, Aral Sea retreat, Turkish earthquake) or enter a
+   custom bounding box.
+2. **Choose two date ranges** — the app finds the least-cloudy Sentinel-2 scene
+   in each range automatically.
+3. **View results**:
+   - Side-by-side true-color satellite images
+   - NDVI / NDBI / MNDWI change heatmap (red = loss, blue = gain)
+   - Overture Maps buildings, roads, and POIs overlaid on the change map
+   - Summary statistics (% area changed, scene metadata)
+
+## Install
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Requires Python 3.10+. No API keys needed — all data sources are free and open.
+
+## Run
+
+```bash
+streamlit run app.py
+```
+
+Then open [http://localhost:8501](http://localhost:8501).
+
+## What to Look At
+
+- **Amazon Deforestation (Rondônia)** — select NDVI index. Red patches = forest
+  cleared since 2019. Roads from Overture show the infrastructure driving
+  deforestation.
+- **Las Vegas Urban Expansion** — select NDBI. Blue patches = new impervious
+  surfaces (concrete, rooftops) in former desert.
+- **Aral Sea Retreat** — select MNDWI. Red = water that disappeared 2018→2023.
+
+## Tech Stack
+
+| Component | Library |
+|-----------|---------|
+| Frontend | Streamlit + streamlit-folium |
+| STAC search | pystac-client (Element84 Earth Search v1) |
+| Band loading | rasterio (windowed COG reads over S3) |
+| Index computation | numpy |
+| Vector data | Overture Maps + geopandas |
+| Maps | folium |
+
+Data sources: [Sentinel-2 L2A on AWS](https://registry.opendata.aws/sentinel-2-l2a-cogs/),
+[Overture Maps Foundation](https://overturemaps.org/).
+
+## Future Directions (Phase 2)
+
+**Embedding-based change detection** — Use a vision foundation model (LeJEPA,
+DINOv2) to compute patch embeddings for before/after imagery. Embedding distance
+captures *semantic* change beyond spectral indices — distinguishing "new parking
+lot" from "new building" even when both show similar NDBI increases.
+
+**Temporal sequences** — Extend from two-date comparison to multi-date time
+series, enabling trend detection and anomaly flagging over 12+ months.
+
+**Planet imagery integration** — Replace Sentinel-2 (10m resolution, 5-day
+revisit) with Planet's PlanetScope or SkySat (0.5–3m, daily revisit) for higher
+spatial and temporal fidelity. This would integrate directly with Planet's
+Tasking API for on-demand collection.
