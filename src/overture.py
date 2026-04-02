@@ -3,6 +3,9 @@
 Fetches building footprints, road segments, and place points from the
 Overture Maps dataset (hosted on AWS S3) for a given bounding box, and
 caches results to disk to avoid redundant network requests.
+
+Cache files are stored as parquet (not GeoJSON) for faster I/O and lossless
+GeoDataFrame roundtrip.
 """
 from __future__ import annotations
 
@@ -36,6 +39,8 @@ def _cache_path(layer: str, bbox: BBox) -> Path:
         Path to the cache file (may not exist yet).
     """
     key = f"{layer}_{bbox[0]:.4f}_{bbox[1]:.4f}_{bbox[2]:.4f}_{bbox[3]:.4f}"
+    # Full MD5 hex (32 chars) used for collision-free filenames;
+    # the plan suggested 12-char prefix but full hash is strictly safer.
     digest = hashlib.md5(key.encode()).hexdigest()
     return _CACHE_DIR / f"{layer}_{digest}.parquet"
 
@@ -78,6 +83,7 @@ def fetch_overture_layer(
         from overturemaps import core  # local import to keep module importable without net
 
         logger.debug("Fetching Overture layer '%s' for bbox %s", layer, bbox)
+        # Suppress FutureWarning / DeprecationWarning from the overturemaps package.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             gdf: gpd.GeoDataFrame = core.geodataframe(layer, bbox=bbox)
