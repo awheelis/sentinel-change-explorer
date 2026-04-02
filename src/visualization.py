@@ -182,8 +182,10 @@ def build_folium_map(
     if overture_context is not None and show_overture:
         buildings = overture_context.get("building", gpd.GeoDataFrame())
         if not buildings.empty:
+            # Strip to geometry-only to avoid JSON serialization errors
+            # from complex nested Overture properties.
             folium.GeoJson(
-                buildings.__geo_interface__,
+                buildings[["geometry"]].__geo_interface__,
                 name="Buildings",
                 style_function=lambda _: {
                     "fillColor": "#ff7800",
@@ -196,7 +198,7 @@ def build_folium_map(
         segments = overture_context.get("segment", gpd.GeoDataFrame())
         if not segments.empty:
             folium.GeoJson(
-                segments.__geo_interface__,
+                segments[["geometry"]].__geo_interface__,
                 name="Roads",
                 style_function=lambda _: {
                     "color": "#4477ff",

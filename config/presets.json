@@ -20,7 +20,7 @@
   {
     "name": "Amazon Deforestation (Rondônia)",
     "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture along the BR-319 region.",
-    "bbox": [-62.90, -9.60, -62.50, -9.20],
+    "bbox": [-62.80, -9.50, -62.65, -9.35],
     "before_range": ["2019-07-01", "2019-09-30"],
     "after_range": ["2023-07-01", "2023-09-30"],
     "default_index": "ndvi",
