@@ -10,4 +10,3 @@ Pillow>=10.2.0
 overturemaps>=0.7.0
 pyarrow>=15.0.0
 shapely>=2.0.3
-pytest>=8.1.0

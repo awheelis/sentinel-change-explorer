@@ -163,18 +163,19 @@ def main() -> None:
         # Initialize widget state on first load
         if "_last_preset" not in st.session_state:
             st.session_state["_last_preset"] = None
-            st.session_state["west"] = -115.32
-            st.session_state["east"] = -115.08
-            st.session_state["south"] = 36.08
-            st.session_state["north"] = 36.28
+            # Default coordinates match Amazon Deforestation preset (index=3)
+            st.session_state["west"] = -62.80
+            st.session_state["east"] = -62.65
+            st.session_state["south"] = -9.50
+            st.session_state["north"] = -9.35
             from datetime import date as _date
-            st.session_state["before_start"] = _date.fromisoformat("2019-05-01")
-            st.session_state["before_end"] = _date.fromisoformat("2019-07-31")
-            st.session_state["after_start"] = _date.fromisoformat("2023-05-01")
-            st.session_state["after_end"] = _date.fromisoformat("2023-07-31")
+            st.session_state["before_start"] = _date.fromisoformat("2019-07-01")
+            st.session_state["before_end"] = _date.fromisoformat("2019-09-30")
+            st.session_state["after_start"] = _date.fromisoformat("2023-07-01")
+            st.session_state["after_end"] = _date.fromisoformat("2023-09-30")
             st.session_state["index_choice"] = "ndvi"
 
-        preset_choice = st.selectbox("Preset location", preset_names)
+        preset_choice = st.selectbox("Preset location", preset_names, index=3)
         if preset_choice != "Custom…":
             preset = next(p for p in presets if p["name"] == preset_choice)
             default_bbox = preset["bbox"]
@@ -258,6 +259,12 @@ def main() -> None:
         return
 
     # Validate bbox inputs
+    if not (-180 <= west <= 180 and -180 <= east <= 180):
+        st.error("Longitude must be between -180 and 180.")
+        return
+    if not (-90 <= south <= 90 and -90 <= north <= 90):
+        st.error("Latitude must be between -90 and 90.")
+        return
     if west >= east:
         st.error(f"West ({west:.4f}) must be less than East ({east:.4f}).")
         return
