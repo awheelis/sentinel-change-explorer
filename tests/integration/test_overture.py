@@ -1,13 +1,14 @@
-# tests/test_overture_smoke.py
-"""Integration smoke test for overture.py.
+"""Integration tests for overture.py.
 
 Requires internet access to Overture Maps on AWS S3.
-Run with: pytest tests/test_overture_smoke.py -v -s
+Run with: pytest tests/integration/test_overture.py -v -s
 """
 import pytest
 import geopandas as gpd
 from src.overture import fetch_overture_layer, get_overture_context
 from tests.conftest import assert_within
+
+pytestmark = pytest.mark.network
 
 
 def test_fetch_buildings_returns_geodataframe():

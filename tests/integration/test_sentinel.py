@@ -1,17 +1,19 @@
-# tests/test_sentinel_smoke.py
-"""Integration smoke test for sentinel.py.
+"""Integration tests for sentinel.py.
 
 Requires internet access and unsigned S3 access (no AWS creds needed).
-Run with: pytest tests/test_sentinel_smoke.py -v -s
+Run with: pytest tests/integration/test_sentinel.py -v -s
 """
 import shutil
 from pathlib import Path
 
 import numpy as np
+import pytest
 from src.sentinel import search_scenes, load_bands
 from tests.conftest import assert_within
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache" / "bands"
+
+pytestmark = pytest.mark.network
 
 
 def test_search_scenes_returns_results():

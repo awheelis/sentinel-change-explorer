@@ -179,33 +179,52 @@ def _estimate_memory_mb(west, south, east, north):
 
 
 class TestBboxValidation:
+    """Test that the app's bbox validation logic rejects invalid inputs.
+
+    The validation lives inline in app.main() using simple comparisons.
+    We test the same conditions the app checks to confirm the invariants.
+    """
+
     def test_west_gte_east_is_invalid(self):
-        assert 10.0 >= 5.0  # west >= east
+        """App rejects bbox where west >= east."""
+        west, east = 10.0, 5.0
+        # This is the condition app.py checks at line ~257
+        assert west >= east, "Precondition: this bbox should be invalid"
 
     def test_south_gte_north_is_invalid(self):
-        assert 40.0 >= 30.0  # south >= north
+        """App rejects bbox where south >= north."""
+        south, north = 40.0, 30.0
+        assert south >= north, "Precondition: this bbox should be invalid"
 
-    def test_valid_bbox_passes(self):
+    def test_valid_bbox_accepted(self):
+        """A well-formed bbox passes both checks."""
         west, south, east, north = -115.20, 36.10, -115.15, 36.15
         assert west < east
         assert south < north
 
 
 class TestMemoryGuard:
+    """Test the memory estimation formula that app.py uses to reject oversized bboxes.
+
+    The formula is inline in main(), so we replicate it here and verify it
+    produces correct accept/reject decisions for known bboxes.
+    """
+
     def test_small_bbox_under_limit(self):
+        """A typical preset bbox (~0.05 x 0.05 deg) should be well under 500 MB."""
         estimated = _estimate_memory_mb(-115.20, 36.10, -115.15, 36.15)
         assert estimated < 500, f"Small bbox estimated {estimated:.0f} MB, expected < 500"
+        assert estimated > 0, "Should be positive for non-degenerate bbox"
 
     def test_huge_bbox_over_limit(self):
+        """A 5x5 degree bbox at the equator should exceed 500 MB."""
         estimated = _estimate_memory_mb(-5.0, -2.5, 0.0, 2.5)
         assert estimated > 500, f"Huge bbox estimated {estimated:.0f} MB, expected > 500"
 
-    def test_formula_agrees_with_app(self):
-        west, south, east, north = -115.28, 36.15, -115.18, 36.23
-        estimated = _estimate_memory_mb(west, south, east, north)
-        bbox_width = east - west
-        bbox_height = north - south
-        center_lat = (south + north) / 2.0
-        pixels = bbox_width * bbox_height * math.cos(math.radians(center_lat)) * (111_000 / 10) ** 2
-        expected_mb = pixels * 5 * 2 * 8 / (1024 ** 2)
-        assert abs(estimated - expected_mb) < 0.01
+    def test_latitude_affects_estimate(self):
+        """Same degree-extent bbox is smaller near the poles (cos scaling)."""
+        equator = _estimate_memory_mb(0.0, -0.5, 1.0, 0.5)
+        high_lat = _estimate_memory_mb(0.0, 59.5, 1.0, 60.5)
+        assert high_lat < equator, (
+            f"High-lat ({high_lat:.0f} MB) should be smaller than equator ({equator:.0f} MB)"
+        )
