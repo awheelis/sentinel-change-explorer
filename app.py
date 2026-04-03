@@ -129,7 +129,10 @@ def main() -> None:
     if "_warmup_done" not in st.session_state:
         with st.status("Preparing satellite data for all presets…", expanded=True) as status:
             st.write("Pre-fetching scenes, bands, and map context for all presets…")
-            warm_preset_caches()
+            try:
+                warm_preset_caches()
+            except Exception:
+                logger.warning("Warm-up failed; continuing without cache priming", exc_info=True)
             st.session_state["_warmup_done"] = True
             status.update(label="Ready!", state="complete", expanded=False)
 
@@ -271,71 +274,51 @@ def main() -> None:
 
     st.session_state["_cache_key"] = cache_key
 
-    # ── Fetch data with step-by-step progress ────────────────────────────────
+    # ── Fetch data concurrently ──────────────────────────────────────────────
     needs_before = "before_scene" not in st.session_state
     needs_after = "after_scene" not in st.session_state
     needs_overture = show_overture and "overture" not in st.session_state
 
     if needs_before or needs_after or needs_overture:
-        total = needs_before + needs_after + needs_overture
-        step = 0
-        with st.status("Analyzing change detection...", expanded=True) as status:
-            if needs_before:
-                step += 1
-                st.write(f"Step {step}/{total} — Searching for best before scene...")
-                scenes = search_scenes(
-                    bbox=bbox, date_range=before_range, max_cloud_cover=max_cloud,
-                )
-                if not scenes:
-                    st.error(f"No before scenes found with cloud cover < {max_cloud:.0f}%")
-                    status.update(label="Analysis failed", state="error")
-                    return
-                scene = scenes[0]
-                st.write(
-                    f"Step {step}/{total} — Loading before bands from S3 "
-                    f"({scene['id']}, {scene['cloud_cover']:.1f}% cloud)..."
-                )
-                try:
-                    bands = load_bands(
-                        scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10,
-                    )
-                except Exception as exc:
-                    st.error(f"Failed to load before bands: {exc}")
-                    status.update(label="Analysis failed", state="error")
-                    return
-                st.session_state["before_scene"] = scene
-                st.session_state["before_bands"] = bands
+        with st.status("Analyzing change detection…", expanded=True) as status:
+            st.write("Fetching scenes and bands concurrently…")
 
-            if needs_after:
-                step += 1
-                st.write(f"Step {step}/{total} — Searching for best after scene...")
-                scenes = search_scenes(
-                    bbox=bbox, date_range=after_range, max_cloud_cover=max_cloud,
-                )
+            def _fetch_date(date_range):
+                """Search + load bands for one date range. Returns (scene, bands) or raises."""
+                scenes = search_scenes(bbox=bbox, date_range=date_range, max_cloud_cover=max_cloud)
                 if not scenes:
-                    st.error(f"No after scenes found with cloud cover < {max_cloud:.0f}%")
-                    status.update(label="Analysis failed", state="error")
-                    return
+                    raise RuntimeError(f"No scenes found with cloud cover < {max_cloud:.0f}%")
                 scene = scenes[0]
-                st.write(
-                    f"Step {step}/{total} — Loading after bands from S3 "
-                    f"({scene['id']}, {scene['cloud_cover']:.1f}% cloud)..."
-                )
-                try:
-                    bands = load_bands(
-                        scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10,
-                    )
-                except Exception as exc:
-                    st.error(f"Failed to load after bands: {exc}")
-                    status.update(label="Analysis failed", state="error")
-                    return
-                st.session_state["after_scene"] = scene
-                st.session_state["after_bands"] = bands
+                bands = load_bands(scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10)
+                return scene, bands
 
-            if needs_overture:
-                step += 1
-                st.write(f"Step {step}/{total} — Fetching Overture Maps context...")
-                st.session_state["overture"] = get_overture_context(bbox=bbox)
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                future_before = executor.submit(_fetch_date, before_range) if needs_before else None
+                future_after = executor.submit(_fetch_date, after_range) if needs_after else None
+                future_overture = executor.submit(get_overture_context, bbox=bbox) if needs_overture else None
+
+                if future_before is not None:
+                    try:
+                        scene, bands = future_before.result()
+                        st.session_state["before_scene"] = scene
+                        st.session_state["before_bands"] = bands
+                    except Exception as exc:
+                        st.error(f"Failed to fetch before data: {exc}")
+                        status.update(label="Analysis failed", state="error")
+                        return
+
+                if future_after is not None:
+                    try:
+                        scene, bands = future_after.result()
+                        st.session_state["after_scene"] = scene
+                        st.session_state["after_bands"] = bands
+                    except Exception as exc:
+                        st.error(f"Failed to fetch after data: {exc}")
+                        status.update(label="Analysis failed", state="error")
+                        return
+
+                if future_overture is not None:
+                    st.session_state["overture"] = future_overture.result()
 
             status.update(label="Analysis complete!", state="complete", expanded=False)
 

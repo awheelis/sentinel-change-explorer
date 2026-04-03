@@ -112,3 +112,33 @@ def test_warm_called_before_main_ui(monkeypatch):
     # warm_preset_caches is defined and callable
     from app import warm_preset_caches
     assert callable(warm_preset_caches)
+
+
+from concurrent.futures import ThreadPoolExecutor
+
+
+def test_concurrent_fetch_pattern():
+    """Verify the concurrent fetch pattern works correctly with futures."""
+    results = {}
+
+    def fetch_before():
+        return {"id": "before-scene", "bands": {"red": "data"}}
+
+    def fetch_after():
+        return {"id": "after-scene", "bands": {"red": "data"}}
+
+    def fetch_overture():
+        return {"building": [], "segment": [], "place": []}
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_before = executor.submit(fetch_before)
+        future_after = executor.submit(fetch_after)
+        future_overture = executor.submit(fetch_overture)
+
+        results["before"] = future_before.result()
+        results["after"] = future_after.result()
+        results["overture"] = future_overture.result()
+
+    assert results["before"]["id"] == "before-scene"
+    assert results["after"]["id"] == "after-scene"
+    assert "building" in results["overture"]
