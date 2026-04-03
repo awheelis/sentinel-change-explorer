@@ -12,6 +12,7 @@ import io
 from typing import Optional
 
 import folium
+from folium.plugins import Draw
 import geopandas as gpd
 import matplotlib
 import matplotlib.colors as mcolors
@@ -248,6 +249,7 @@ def build_folium_map(
     overture_context: Optional[dict[str, gpd.GeoDataFrame]] = None,
     show_heatmap: bool = True,
     show_overture: bool = True,
+    enable_draw: bool = False,
 ) -> folium.Map:
     """Build a folium Map with imagery overlays and Overture Maps context.
 
@@ -342,6 +344,20 @@ def build_folium_map(
                         popup=label,
                         tooltip=label,
                     ).add_to(m)
+
+    if enable_draw:
+        Draw(
+            export=False,
+            draw_options={
+                "polyline": False,
+                "circle": False,
+                "circlemarker": False,
+                "marker": False,
+                "polygon": True,
+                "rectangle": True,
+            },
+            edit_options={"edit": False},
+        ).add_to(m)
 
     folium.LayerControl(collapsed=False).add_to(m)
     return m

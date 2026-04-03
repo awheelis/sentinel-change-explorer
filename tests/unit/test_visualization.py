@@ -184,6 +184,12 @@ class TestBuildFoliumMap:
         html = m._repr_html_()
         assert "Buildings" in html
 
+    def test_draw_plugin_present(self):
+        """Map should include Draw plugin when enable_draw=True."""
+        m = build_folium_map(bbox=BBOX, enable_draw=True)
+        html = m._repr_html_()
+        assert "Draw" in html or "draw" in html
+
 
 class TestChangeHistogram:
     def _make_delta(self, shape=(200, 200)):

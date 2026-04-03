@@ -451,8 +451,49 @@ def main() -> None:
         overture_context=overture,
         show_heatmap=True,
         show_overture=show_overture,
+        enable_draw=True,
     )
-    st_folium(folium_map, width="100%", height=500, returned_objects=[])
+    map_data = st_folium(folium_map, width="100%", height=500, returned_objects=["last_active_drawing"])
+
+    # Read drawn geometry and update bbox session state
+    if map_data and map_data.get("last_active_drawing"):
+        drawing = map_data["last_active_drawing"]
+        geom = drawing.get("geometry")
+        if geom and geom.get("type") in ("Polygon", "Rectangle"):
+            coords = geom["coordinates"][0]  # outer ring
+            lons = [c[0] for c in coords]
+            lats = [c[1] for c in coords]
+            drawn_west = min(lons)
+            drawn_east = max(lons)
+            drawn_south = min(lats)
+            drawn_north = max(lats)
+
+            # Validate against memory guard
+            drawn_width = drawn_east - drawn_west
+            drawn_height = drawn_north - drawn_south
+            drawn_center_lat = (drawn_south + drawn_north) / 2.0
+            drawn_pixels = (
+                drawn_width * drawn_height
+                * math.cos(math.radians(drawn_center_lat))
+                * (111_000 / 10) ** 2
+            )
+            drawn_mb = drawn_pixels * len(ALL_BAND_KEYS) * 2 * 8 / (1024 ** 2)
+
+            if drawn_mb <= 500:
+                st.session_state["west"] = round(drawn_west, 4)
+                st.session_state["east"] = round(drawn_east, 4)
+                st.session_state["south"] = round(drawn_south, 4)
+                st.session_state["north"] = round(drawn_north, 4)
+                st.info(
+                    f"AOI updated from drawing: "
+                    f"({drawn_west:.4f}, {drawn_south:.4f}, {drawn_east:.4f}, {drawn_north:.4f}). "
+                    f"Click **Analyze Change** to re-run."
+                )
+            else:
+                st.warning(
+                    f"Drawn area too large (~{drawn_mb:,.0f} MB). "
+                    f"Please draw a smaller region (limit: 500 MB)."
+                )
 
 
 if __name__ == "__main__":
