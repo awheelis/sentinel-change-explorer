@@ -5,8 +5,10 @@ Run with: streamlit run app.py
 from __future__ import annotations
 
 import json
+import logging
 import math
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -48,6 +50,48 @@ def load_presets() -> list[dict]:
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         st.warning(f"Could not load presets: {exc}")
         return []
+
+
+logger = logging.getLogger(__name__)
+
+
+def warm_preset_caches() -> None:
+    """Pre-fetch search results, bands, and Overture data for all presets.
+
+    Runs all presets concurrently via ThreadPoolExecutor. Individual preset
+    failures are logged and swallowed so one bad preset doesn't block the rest.
+    Populates the disk caches used by load_bands and get_overture_context.
+    """
+    presets = load_presets()
+    if not presets:
+        return
+
+    def _warm_one_date(preset, date_range_key):
+        """Search + load bands for one preset and one date range."""
+        bbox = tuple(preset["bbox"])
+        dr = preset[date_range_key]
+        date_range = f"{dr[0]}/{dr[1]}"
+        scenes = search_scenes(bbox=bbox, date_range=date_range, max_cloud_cover=20)
+        if scenes:
+            load_bands(scene=scenes[0], bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10)
+
+    def _warm_overture(preset):
+        """Fetch Overture context for one preset."""
+        bbox = tuple(preset["bbox"])
+        get_overture_context(bbox=bbox)
+
+    futures = []
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        for preset in presets:
+            futures.append(executor.submit(_warm_one_date, preset, "before_range"))
+            futures.append(executor.submit(_warm_one_date, preset, "after_range"))
+            futures.append(executor.submit(_warm_overture, preset))
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception:
+                logger.warning("Preset warm-up task failed", exc_info=True)
 
 
 def compute_index_for_bands(
