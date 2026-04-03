@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -135,6 +136,9 @@ def main() -> None:
     )
 
     # ── Pre-warm all preset caches on first server load ──────────────────────
+    skip_warmup = os.environ.get("SKIP_WARMUP", "").lower() in ("1", "true", "yes")
+    if skip_warmup and "_warmup_done" not in st.session_state:
+        st.session_state["_warmup_done"] = True
     if "_warmup_done" not in st.session_state:
         warmup_bar = st.progress(0, text="Preparing satellite data for all presets…")
         try:
@@ -179,8 +183,10 @@ def main() -> None:
             default_after_start = preset["after_range"][0]
             default_after_end = preset["after_range"][1]
             default_index = preset.get("default_index", "ndvi")
+            if "what_to_expect" in preset:
+                st.info(f"**What to expect:** {preset['what_to_expect']}")
             if "notes" in preset:
-                st.info(preset["notes"])
+                st.caption(f"💡 {preset['notes']}")
         else:
             default_bbox = [-115.32, 36.08, -115.08, 36.28]
             default_before_start, default_before_end = "2019-05-01", "2019-07-31"

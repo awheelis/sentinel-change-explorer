@@ -1,47 +1,52 @@
 [
   {
     "name": "Las Vegas Urban Expansion",
-    "description": "Desert scrubland converted to suburban development on the city's western edge (Summerlin/Rhodes Ranch area).",
-    "bbox": [-115.32, 36.08, -115.08, 36.28],
+    "description": "New suburban sprawl in the Summerlin South / Rhodes Ranch area — desert converted to housing tracts.",
+    "bbox": [-115.28, 36.15, -115.18, 36.23],
     "before_range": ["2019-05-01", "2019-07-31"],
     "after_range": ["2023-05-01", "2023-07-31"],
     "default_index": "ndbi",
-    "notes": "NDBI highlights new impervious surfaces. Red glow = new construction."
+    "notes": "NDBI highlights new impervious surfaces. Red glow = new construction.",
+    "what_to_expect": "In the true-color comparison you should see tan desert in the 'before' image replaced by grey rooftops and street grids in the 'after' image. The NDBI heatmap will light up red over newly paved and built areas. Overture building footprints will cluster where the new subdivisions appeared."
   },
   {
     "name": "Tonga Volcanic Eruption",
     "description": "Hunga Tonga–Hunga Ha'apai island before and after the January 2022 eruption. Island shape changed dramatically.",
-    "bbox": [-175.45, -20.65, -175.30, -20.50],
+    "bbox": [-175.42, -20.57, -175.35, -20.51],
     "before_range": ["2021-10-01", "2021-12-31"],
     "after_range": ["2022-03-01", "2022-05-31"],
     "default_index": "ndvi",
-    "notes": "Post-eruption island is smaller. MNDWI shows water extent change."
+    "notes": "Post-eruption island is smaller. MNDWI shows water extent change.",
+    "what_to_expect": "The 'before' image shows a small green island connecting two older landmasses. After the eruption most of the island is gone — replaced by open ocean. Switch to MNDWI to see the water-extent change. Overture data will be sparse here since it is a remote uninhabited island."
   },
   {
     "name": "Amazon Deforestation (Rondônia)",
-    "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture along the BR-319 region.",
-    "bbox": [-62.80, -9.50, -62.65, -9.35],
+    "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture.",
+    "bbox": [-62.78, -9.46, -62.68, -9.38],
     "before_range": ["2019-07-01", "2019-09-30"],
     "after_range": ["2023-07-01", "2023-09-30"],
     "default_index": "ndvi",
-    "notes": "Strong NDVI loss signal. Best viewed in dry season (Jul-Sep) for cloud-free imagery."
+    "notes": "Strong NDVI loss signal. Best viewed in dry season (Jul-Sep) for cloud-free imagery.",
+    "what_to_expect": "Expect dense green canopy in the 'before' image with characteristic fishbone-pattern clearings expanding in the 'after' image. The NDVI heatmap will show strong red patches where forest was replaced by bare soil or pasture. Roads from Overture trace the edges of cleared areas."
   },
   {
     "name": "Aral Sea Retreat",
-    "description": "Southern Aral Sea (Kazakhstan/Uzbekistan) showing continued water body shrinkage over 5 years.",
-    "bbox": [58.50, 44.80, 59.20, 45.40],
+    "description": "Southern Aral Sea shoreline retreat — exposed lakebed where water once stood.",
+    "bbox": [58.68, 45.02, 58.80, 45.12],
     "before_range": ["2018-07-01", "2018-09-30"],
     "after_range": ["2023-07-01", "2023-09-30"],
     "default_index": "mndwi",
-    "notes": "MNDWI best captures water loss. Blue = water gain, red = water loss (expect red)."
+    "notes": "MNDWI best captures water loss. Blue = water gain, red = water loss (expect red).",
+    "what_to_expect": "The 'before' true-color image should show blue-green water along the shoreline, while the 'after' image reveals dry, white salt-crusted lakebed. The MNDWI heatmap will be predominantly red where the water has retreated. Overture data is minimal in this remote region."
   },
   {
-    "name": "Turkish Earthquake (Hatay Province)",
-    "description": "Urban destruction in Hatay Province following the February 6, 2023 earthquake. Collapsed buildings visible in change signal.",
-    "bbox": [36.10, 36.15, 36.40, 36.35],
+    "name": "Turkish Earthquake (Antakya)",
+    "description": "Central Antakya destruction following the February 6, 2023 earthquake. Collapsed buildings visible in change signal.",
+    "bbox": [36.14, 36.19, 36.24, 36.27],
     "before_range": ["2022-11-01", "2023-01-31"],
     "after_range": ["2023-03-01", "2023-04-30"],
     "default_index": "ndbi",
-    "notes": "NDBI decrease indicates building collapse (rubble scatters differently). Keep cloud cover < 30%."
+    "notes": "NDBI decrease indicates building collapse (rubble scatters differently). Keep cloud cover < 30%.",
+    "what_to_expect": "True-color changes are subtle at Sentinel-2 resolution, but you may notice lighter tones where rubble replaced intact buildings. The NDBI heatmap shows mixed signals — decreases where structures collapsed and increases where debris was cleared into open lots. Overture building footprints highlight the dense urban fabric that was affected."
   }
 ]
