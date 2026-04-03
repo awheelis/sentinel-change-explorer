@@ -1,8 +1,9 @@
 """Tests for visualization helpers."""
+import matplotlib.figure
 import numpy as np
 import pytest
 from PIL import Image
-from src.visualization import true_color_image, downscale_array, index_to_rgba
+from src.visualization import true_color_image, downscale_array, index_to_rgba, change_histogram
 import folium
 import geopandas as gpd
 from shapely.geometry import box, Point, LineString
@@ -182,6 +183,33 @@ class TestBuildFoliumMap:
         )
         html = m._repr_html_()
         assert "Buildings" in html
+
+
+class TestChangeHistogram:
+    def _make_delta(self, shape=(200, 200)):
+        return np.random.default_rng(42).uniform(-0.5, 0.5, shape).astype(np.float32)
+
+    def test_returns_figure(self):
+        delta = self._make_delta()
+        fig = change_histogram(delta)
+        assert isinstance(fig, matplotlib.figure.Figure)
+
+    def test_has_vertical_threshold_lines(self):
+        delta = self._make_delta()
+        fig = change_histogram(delta, threshold=0.1)
+        ax = fig.axes[0]
+        vlines = [line for line in ax.get_lines() if len(line.get_xdata()) > 0]
+        xpositions = sorted([line.get_xdata()[0] for line in vlines])
+        assert len(xpositions) == 2
+        assert abs(xpositions[0] - (-0.1)) < 1e-6
+        assert abs(xpositions[1] - 0.1) < 1e-6
+
+    def test_bins_count(self):
+        delta = self._make_delta()
+        fig = change_histogram(delta, bins=50)
+        ax = fig.axes[0]
+        patches = ax.patches
+        assert len(patches) == 50
 
 
 class TestImageToBoundsOverlay:

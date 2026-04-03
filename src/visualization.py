@@ -15,6 +15,8 @@ import folium
 import geopandas as gpd
 import matplotlib
 import matplotlib.colors as mcolors
+import matplotlib.figure
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
@@ -132,6 +134,50 @@ def index_to_rgba(
     rgba_uint8[~mask, 3] = int(alpha * 255)
 
     return Image.fromarray(rgba_uint8, mode="RGBA")
+
+
+def change_histogram(
+    delta: np.ndarray,
+    threshold: float = 0.05,
+    bins: int = 50,
+) -> matplotlib.figure.Figure:
+    """Create a histogram of change delta values with threshold markers.
+
+    Bars are colored by their bin center relative to the threshold:
+    red for loss (< -threshold), blue for gain (> threshold), gray otherwise.
+
+    Args:
+        delta: 2D float32 array of index difference (after - before).
+        threshold: Boundary for classifying gain/loss.
+        bins: Number of histogram bins.
+
+    Returns:
+        A matplotlib Figure containing the histogram.
+    """
+    flat = delta.ravel()
+
+    fig, ax = plt.subplots()
+    counts, edges, patches = ax.hist(flat, bins=bins, edgecolor="black", linewidth=0.3)
+
+    # Color each bar based on its bin center
+    for patch, left_edge, right_edge in zip(patches, edges[:-1], edges[1:]):
+        center = (left_edge + right_edge) / 2
+        if center < -threshold:
+            patch.set_facecolor("#d73027")
+        elif center > threshold:
+            patch.set_facecolor("#4575b4")
+        else:
+            patch.set_facecolor("#999999")
+
+    ax.axvline(-threshold, color="black", linestyle="--", linewidth=1)
+    ax.axvline(threshold, color="black", linestyle="--", linewidth=1)
+
+    ax.set_xlabel("Delta Index Value")
+    ax.set_ylabel("Pixel Count")
+    ax.set_title("Change Distribution")
+
+    fig.tight_layout()
+    return fig
 
 
 def downscale_array(

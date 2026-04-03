@@ -25,6 +25,7 @@ from src.indices import compute_change, compute_mndwi, compute_ndbi, compute_ndv
 from src.overture import get_overture_context
 from src.visualization import (
     build_folium_map,
+    change_histogram,
     downscale_array,
     index_to_rgba,
     true_color_image,
@@ -402,6 +403,8 @@ def main() -> None:
     detail_cols[1].write(f"**After:** {after_scene['id']}  \n"
                          f"Date: {after_scene['datetime'][:10]}  \n"
                          f"Cloud: {after_scene['cloud_cover']:.1f}%")
+
+    st.pyplot(change_histogram(delta, threshold=THRESHOLD))
 
     if overture:
         st.caption(
