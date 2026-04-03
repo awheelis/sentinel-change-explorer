@@ -53,7 +53,12 @@ under 5 seconds; integration tests hit real AWS/STAC endpoints and need internet
 pytest tests/unit/ tests/perf/         # fast, no network (~3s)
 pytest -m network                      # integration tests (requires internet)
 pytest                                 # everything
+python tests/e2e_visual_test.py        # visual E2E via headless Chromium (~35-90s)
 ```
+
+For a detailed visual E2E testing procedure (install steps, timing expectations,
+screenshot verification checklist, known issues) see
+[docs/VISUAL_E2E_TEST_PROCEDURE.md](docs/VISUAL_E2E_TEST_PROCEDURE.md).
 
 ## Tech Stack
 
