@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+markers = [
+    "network: tests that require internet access (S3, STAC API)",
+]
