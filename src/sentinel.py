@@ -95,7 +95,9 @@ def load_bands(
             resolution (e.g. swir16 at 20m) are upsampled to this.
 
     Returns:
-        Dict mapping band key → 2D uint16 numpy array.
+        Dict mapping band key → 2D uint16 numpy array in EPSG:4326 (WGS84).
+        Arrays are reprojected from the scene's native UTM CRS so they
+        align correctly with WGS84 map overlays.
 
     Raises:
         KeyError: If a requested band_key is not in scene["assets"].
@@ -147,6 +149,7 @@ def load_bands(
             arrays[key] = future.result()
 
     # ── Reproject all bands from native UTM to EPSG:4326 ─────────────────
+    # native_bounds, out_w, out_h, dst_crs are set in the reference band block above
     dst_crs_4326 = "EPSG:4326"
     src_transform = rasterio.transform.from_bounds(
         *native_bounds, out_w, out_h,
