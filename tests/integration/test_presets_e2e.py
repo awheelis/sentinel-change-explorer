@@ -17,7 +17,7 @@ from src.sentinel import search_scenes, load_bands
 from src.indices import compute_ndvi, compute_ndbi, compute_mndwi, compute_change
 from src.visualization import true_color_image, index_to_rgba
 
-PRESETS_FILE = Path(__file__).resolve().parent.parent / "config" / "presets.json"
+PRESETS_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "presets.json"
 ALL_BAND_KEYS = ["red", "green", "blue", "nir", "swir16"]
 
 INDEX_FN = {

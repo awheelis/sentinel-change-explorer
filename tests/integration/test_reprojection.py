@@ -15,7 +15,7 @@ import pytest
 
 from src.sentinel import search_scenes, load_bands
 
-PRESETS_FILE = Path(__file__).resolve().parent.parent / "config" / "presets.json"
+PRESETS_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "presets.json"
 
 
 def _load_presets():
