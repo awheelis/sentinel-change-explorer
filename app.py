@@ -318,7 +318,10 @@ def main() -> None:
                         return
 
                 if future_overture is not None:
-                    st.session_state["overture"] = future_overture.result()
+                    try:
+                        st.session_state["overture"] = future_overture.result()
+                    except Exception as exc:
+                        logger.warning("Overture context fetch failed: %s", exc)
 
             status.update(label="Analysis complete!", state="complete", expanded=False)
 
