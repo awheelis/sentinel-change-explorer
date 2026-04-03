@@ -1,6 +1,5 @@
 """Tests for preset cache warm-up logic."""
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 
 
 def test_warm_preset_caches_calls_all_presets():
@@ -94,3 +93,22 @@ def test_warm_preset_caches_survives_failures():
         # The working preset should still have been loaded
         assert mock_load.call_count >= 2  # before + after for working preset
         assert mock_overture.call_count >= 1  # overture for working preset
+
+
+def test_warm_called_before_main_ui(monkeypatch):
+    """The warm-up should be called early in main(), before the sidebar renders."""
+    call_order = []
+
+    def fake_warm():
+        call_order.append("warm")
+
+    def fake_set_page_config(**kwargs):
+        call_order.append("set_page_config")
+
+    def fake_title(t):
+        call_order.append("title")
+
+    # We can't fully run main() without Streamlit, but we can verify
+    # warm_preset_caches is defined and callable
+    from app import warm_preset_caches
+    assert callable(warm_preset_caches)

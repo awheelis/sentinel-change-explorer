@@ -125,6 +125,14 @@ def main() -> None:
         "urbanization, and water change using Sentinel-2 L2A imagery."
     )
 
+    # ── Pre-warm all preset caches on first server load ──────────────────────
+    if "_warmup_done" not in st.session_state:
+        with st.status("Preparing satellite data for all presets…", expanded=True) as status:
+            st.write("Pre-fetching scenes, bands, and map context for all presets…")
+            warm_preset_caches()
+            st.session_state["_warmup_done"] = True
+            status.update(label="Ready!", state="complete", expanded=False)
+
     presets = load_presets()
     preset_names = ["Custom…"] + [p["name"] for p in presets]
 
