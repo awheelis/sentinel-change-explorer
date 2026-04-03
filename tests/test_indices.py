@@ -96,3 +96,28 @@ class TestComputeChange:
         after = np.random.rand(*shape).astype(np.float32)
         delta = compute_change(before=before, after=after)
         assert delta.shape == shape
+
+
+class TestChunkedComputation:
+    def test_chunked_matches_single_pass(self):
+        """Chunked path should produce identical results to single-pass."""
+        np.random.seed(42)
+        nir = np.random.randint(0, 10000, (100, 100), dtype=np.uint16)
+        red = np.random.randint(0, 10000, (100, 100), dtype=np.uint16)
+
+        # Force single-pass by using small arrays
+        result_single = compute_ndvi(nir, red)
+
+        # Force chunked by calling internal function with small chunk size
+        from src.indices import _safe_normalized_diff
+        result_chunked = _safe_normalized_diff(nir, red, chunk_rows=10)
+
+        np.testing.assert_allclose(result_single, result_chunked, atol=1e-6)
+
+    def test_chunked_no_nan_or_inf(self):
+        """Chunked computation should handle zeros safely."""
+        zeros = np.zeros((100, 100), dtype=np.uint16)
+        from src.indices import _safe_normalized_diff
+        result = _safe_normalized_diff(zeros, zeros, chunk_rows=10)
+        assert not np.any(np.isnan(result))
+        assert not np.any(np.isinf(result))

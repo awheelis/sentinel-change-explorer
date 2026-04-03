@@ -8,22 +8,49 @@ from __future__ import annotations
 import numpy as np
 
 
-def _safe_normalized_diff(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+_CHUNK_THRESHOLD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _safe_normalized_diff(
+    a: np.ndarray, b: np.ndarray, chunk_rows: int | None = None,
+) -> np.ndarray:
     """Compute (a - b) / (a + b), returning 0 where denominator is zero.
+
+    For large arrays, processes in row-chunks to bound peak memory.
 
     Args:
         a: Numerator-contributing band array.
         b: Denominator-contributing band array.
+        chunk_rows: If set, process in chunks of this many rows. If None,
+            auto-selects based on array size (chunked if > 50 MB per band).
 
     Returns:
         float32 array of normalized difference values clipped to [-1, 1].
     """
-    a = a.astype(np.float32)
-    b = b.astype(np.float32)
-    denom = a + b
-    with np.errstate(invalid="ignore", divide="ignore"):
-        result = np.where(denom == 0, 0.0, (a - b) / denom)
-    return np.clip(result.astype(np.float32), -1.0, 1.0)
+    if chunk_rows is None and a.nbytes > _CHUNK_THRESHOLD_BYTES:
+        chunk_rows = 512
+
+    if chunk_rows is None:
+        # Single-pass: original fast path
+        a = a.astype(np.float32)
+        b = b.astype(np.float32)
+        denom = a + b
+        with np.errstate(invalid="ignore", divide="ignore"):
+            result = np.where(denom == 0, 0.0, (a - b) / denom)
+        return np.clip(result.astype(np.float32), -1.0, 1.0)
+
+    # Chunked path: process row slices to bound memory
+    h = a.shape[0]
+    result = np.empty(a.shape, dtype=np.float32)
+    for start in range(0, h, chunk_rows):
+        end = min(start + chunk_rows, h)
+        a_chunk = a[start:end].astype(np.float32)
+        b_chunk = b[start:end].astype(np.float32)
+        denom = a_chunk + b_chunk
+        with np.errstate(invalid="ignore", divide="ignore"):
+            chunk_result = np.where(denom == 0, 0.0, (a_chunk - b_chunk) / denom)
+        result[start:end] = np.clip(chunk_result, -1.0, 1.0)
+    return result
 
 
 def compute_ndvi(nir: np.ndarray, red: np.ndarray) -> np.ndarray:
