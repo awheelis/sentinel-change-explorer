@@ -397,7 +397,6 @@ def main() -> None:
     stat_cols[2].metric(f"{INDEX_FUNCTIONS[index_choice][0]} loss", f"{pct_loss:.1f}%")
     stat_cols[3].metric("Unchanged", f"{pct_unchanged:.1f}%")
 
-    index_label = INDEX_FUNCTIONS[index_choice][0]
     tiff_bytes = create_geotiff(
         delta,
         bbox,

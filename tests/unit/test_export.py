@@ -56,7 +56,9 @@ class TestCreateGeotiff:
 
     def test_metadata_omits_empty_strings(self, sample_delta, sample_bbox):
         """Empty metadata strings should not appear as tags."""
-        tiff_bytes = create_geotiff(sample_delta, sample_bbox, index_type="ndvi")
+        tiff_bytes = create_geotiff(
+            sample_delta, sample_bbox, index_type="ndvi",
+        )
         with rasterio.open(io.BytesIO(tiff_bytes)) as ds:
             tags = ds.tags()
             assert "index_type" in tags
