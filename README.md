@@ -44,6 +44,17 @@ Then open [http://localhost:8501](http://localhost:8501).
   surfaces (concrete, rooftops) in former desert.
 - **Aral Sea Retreat** — select MNDWI. Red = water that disappeared 2018→2023.
 
+## Tests
+
+Tests are organized into three tiers. Unit and performance tests run offline in
+under 5 seconds; integration tests hit real AWS/STAC endpoints and need internet.
+
+```bash
+pytest tests/unit/ tests/perf/         # fast, no network (~3s)
+pytest -m network                      # integration tests (requires internet)
+pytest                                 # everything
+```
+
 ## Tech Stack
 
 | Component | Library |
