@@ -262,6 +262,7 @@ def build_folium_map(
             "segment", "place" GeoDataFrame values.
         show_heatmap: If True, add heatmap overlay to map.
         show_overture: If True, add Overture vector layers to map.
+        enable_draw: If True, add Draw plugin for interactive AOI selection.
 
     Returns:
         Configured folium.Map ready for st_folium().
