@@ -9,17 +9,19 @@ from pathlib import Path
 
 import numpy as np
 from src.sentinel import search_scenes, load_bands
+from tests.conftest import assert_within
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache" / "bands"
 
 
 def test_search_scenes_returns_results():
     """Should find at least one Sentinel-2 scene for Las Vegas in June 2023."""
-    scenes = search_scenes(
-        bbox=(-115.32, 36.08, -115.08, 36.28),
-        date_range="2023-06-01/2023-06-30",
-        max_cloud_cover=50,
-    )
+    with assert_within(10, "STAC search"):
+        scenes = search_scenes(
+            bbox=(-115.32, 36.08, -115.08, 36.28),
+            date_range="2023-06-01/2023-06-30",
+            max_cloud_cover=50,
+        )
     assert len(scenes) > 0, "Expected at least one scene"
     scene = scenes[0]
     assert "id" in scene
@@ -37,12 +39,13 @@ def test_load_bands_returns_numpy_arrays():
     scenes = search_scenes(bbox=bbox, date_range="2023-06-01/2023-06-30", max_cloud_cover=50)
     assert scenes, "Need at least one scene to test band loading"
 
-    bands = load_bands(
-        scene=scenes[0],
-        bbox=bbox,
-        band_keys=["red", "green", "blue"],
-        target_res=60,  # Use 60m for fast smoke test
-    )
+    with assert_within(30, "band loading"):
+        bands = load_bands(
+            scene=scenes[0],
+            bbox=bbox,
+            band_keys=["red", "green", "blue"],
+            target_res=60,  # Use 60m for fast smoke test
+        )
     assert set(bands.keys()) >= {"red", "green", "blue"}
     for k, arr in bands.items():
         assert isinstance(arr, np.ndarray), f"{k} should be ndarray"
@@ -57,7 +60,8 @@ def test_load_bands_returns_wgs84_aligned_arrays():
     scenes = search_scenes(bbox=bbox, date_range="2023-06-01/2023-06-30", max_cloud_cover=50)
     assert scenes, "Need at least one scene"
 
-    bands = load_bands(scene=scenes[0], bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
+    with assert_within(30, "WGS84 reprojection"):
+        bands = load_bands(scene=scenes[0], bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
 
     shapes = [arr.shape for arr in bands.values()]
     # All bands must have the same shape after reprojection
@@ -92,7 +96,8 @@ def test_disk_cache_creates_and_reuses_file():
     assert len(npz_files) == 1, f"Expected 1 cache file, found {len(npz_files)}"
 
     # Second call: cache hit, loads from disk
-    bands2 = load_bands(scene=scene, bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
+    with assert_within(1, "cache hit"):
+        bands2 = load_bands(scene=scene, bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
 
     for key in bands1:
         np.testing.assert_array_equal(bands1[key], bands2[key])
