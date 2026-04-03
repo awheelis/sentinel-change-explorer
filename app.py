@@ -55,12 +55,16 @@ def load_presets() -> list[dict]:
 logger = logging.getLogger(__name__)
 
 
-def warm_preset_caches() -> None:
+def warm_preset_caches(on_progress=None) -> None:
     """Pre-fetch search results, bands, and Overture data for all presets.
 
     Runs all presets concurrently via ThreadPoolExecutor. Individual preset
     failures are logged and swallowed so one bad preset doesn't block the rest.
     Populates the disk caches used by load_bands and get_overture_context.
+
+    Args:
+        on_progress: Optional callback called with (completed, total) after
+            each task finishes. Useful for driving a progress bar.
     """
     presets = load_presets()
     if not presets:
@@ -87,11 +91,16 @@ def warm_preset_caches() -> None:
             futures.append(executor.submit(_warm_one_date, preset, "after_range"))
             futures.append(executor.submit(_warm_overture, preset))
 
+        total = len(futures)
+        completed = 0
         for future in as_completed(futures):
             try:
                 future.result()
             except Exception:
                 logger.warning("Preset warm-up task failed", exc_info=True)
+            completed += 1
+            if on_progress is not None:
+                on_progress(completed, total)
 
 
 def compute_index_for_bands(
@@ -127,14 +136,18 @@ def main() -> None:
 
     # ── Pre-warm all preset caches on first server load ──────────────────────
     if "_warmup_done" not in st.session_state:
-        with st.status("Preparing satellite data for all presets…", expanded=True) as status:
-            st.write("Pre-fetching scenes, bands, and map context for all presets…")
-            try:
-                warm_preset_caches()
-            except Exception:
-                logger.warning("Warm-up failed; continuing without cache priming", exc_info=True)
-            st.session_state["_warmup_done"] = True
-            status.update(label="Ready!", state="complete", expanded=False)
+        warmup_bar = st.progress(0, text="Preparing satellite data for all presets…")
+        try:
+            warm_preset_caches(
+                on_progress=lambda done, total: warmup_bar.progress(
+                    done / total,
+                    text=f"Pre-fetching preset data… ({done}/{total} tasks)",
+                ),
+            )
+        except Exception:
+            logger.warning("Warm-up failed; continuing without cache priming", exc_info=True)
+        warmup_bar.empty()
+        st.session_state["_warmup_done"] = True
 
     presets = load_presets()
     preset_names = ["Custom…"] + [p["name"] for p in presets]

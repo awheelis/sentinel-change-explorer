@@ -114,6 +114,42 @@ def test_warm_called_before_main_ui(monkeypatch):
     assert callable(warm_preset_caches)
 
 
+def test_warm_preset_caches_calls_progress_callback():
+    """on_progress should be called once per completed future."""
+    fake_presets = [
+        {
+            "name": "Preset A",
+            "bbox": [-115.32, 36.08, -115.08, 36.28],
+            "before_range": ["2019-05-01", "2019-07-31"],
+            "after_range": ["2023-05-01", "2023-07-31"],
+            "default_index": "ndbi",
+        },
+    ]
+
+    fake_scene = {
+        "id": "test-scene",
+        "cloud_cover": 5.0,
+        "datetime": "2023-06-15T00:00:00Z",
+        "assets": {"red": "url", "green": "url", "blue": "url", "nir": "url", "swir16": "url"},
+        "bbox": [-115.32, 36.08, -115.08, 36.28],
+    }
+
+    progress_calls = []
+
+    with patch("app.load_presets", return_value=fake_presets), \
+         patch("app.search_scenes", return_value=[fake_scene]), \
+         patch("app.load_bands", return_value={}), \
+         patch("app.get_overture_context", return_value={}):
+
+        from app import warm_preset_caches
+        warm_preset_caches(on_progress=lambda done, total: progress_calls.append((done, total)))
+
+    # 1 preset × 3 tasks = 3 calls
+    assert len(progress_calls) == 3
+    # Last call should show all complete
+    assert progress_calls[-1] == (3, 3)
+
+
 from concurrent.futures import ThreadPoolExecutor
 
 
