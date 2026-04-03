@@ -16,7 +16,7 @@ import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 from rasterio.windows import from_bounds
-from rasterio.warp import transform_bounds
+from rasterio.warp import transform_bounds, calculate_default_transform, reproject
 from pystac_client import Client
 
 EARTH_SEARCH_URL = "https://earth-search.aws.element84.com/v1"
@@ -146,4 +146,28 @@ def load_bands(
             key = futures[future]
             arrays[key] = future.result()
 
-    return arrays
+    # ── Reproject all bands from native UTM to EPSG:4326 ─────────────────
+    dst_crs_4326 = "EPSG:4326"
+    src_transform = rasterio.transform.from_bounds(
+        *native_bounds, out_w, out_h,
+    )
+    dst_transform, dst_width, dst_height = calculate_default_transform(
+        dst_crs, dst_crs_4326, out_w, out_h,
+        *native_bounds,
+    )
+
+    reprojected: dict[str, np.ndarray] = {}
+    for key, arr in arrays.items():
+        dst_arr = np.zeros((dst_height, dst_width), dtype=arr.dtype)
+        reproject(
+            source=arr,
+            destination=dst_arr,
+            src_transform=src_transform,
+            src_crs=dst_crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs_4326,
+            resampling=Resampling.bilinear,
+        )
+        reprojected[key] = dst_arr
+
+    return reprojected

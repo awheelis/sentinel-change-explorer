@@ -44,3 +44,25 @@ def test_load_bands_returns_numpy_arrays():
         assert arr.ndim == 2, f"{k} should be 2D"
         assert arr.dtype == np.uint16, f"{k} expected uint16 dtype, got {arr.dtype}"
     print(f"\nBand shapes: { {k: v.shape for k, v in bands.items()} }")
+
+
+def test_load_bands_returns_wgs84_aligned_arrays():
+    """Bands should be reprojected to EPSG:4326 with consistent shapes."""
+    bbox = (-115.32, 36.08, -115.08, 36.28)
+    scenes = search_scenes(bbox=bbox, date_range="2023-06-01/2023-06-30", max_cloud_cover=50)
+    assert scenes, "Need at least one scene"
+
+    bands = load_bands(scene=scenes[0], bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
+
+    shapes = [arr.shape for arr in bands.values()]
+    # All bands must have the same shape after reprojection
+    assert len(set(shapes)) == 1, f"Band shapes should match, got {shapes}"
+    h, w = shapes[0]
+    # WGS84 bbox is 0.24° wide × 0.20° tall. At 60m, width > height in pixels
+    # (because longitude degrees are narrower than latitude degrees at lat 36).
+    # The key assertion: reprojected shape should have a reasonable aspect ratio,
+    # not be wildly stretched (which would happen if UTM pixels were naively
+    # mapped to WGS84 bounds).
+    aspect = w / h
+    assert 0.5 < aspect < 2.0, f"Aspect ratio {aspect:.2f} looks distorted"
+    print(f"\nReprojected band shape: {h}x{w}, aspect ratio: {aspect:.2f}")
