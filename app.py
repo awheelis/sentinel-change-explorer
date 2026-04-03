@@ -202,7 +202,10 @@ def main() -> None:
     )
     num_bands = len(ALL_BAND_KEYS)  # 5
     num_dates = 2  # before + after
-    bytes_per_pixel = 2  # uint16
+    # Peak memory estimate: raw uint16 bands (2 bytes) + float32 intermediates
+    # during index computation (~4 bytes each, with index + delta alive = ~2x).
+    # Conservative multiplier: 8 bytes/pixel accounts for peak working set.
+    bytes_per_pixel = 8  # accounts for float32 index intermediates
     estimated_mb = pixels_per_band * num_bands * num_dates * bytes_per_pixel / (1024 ** 2)
     max_mb = 500
     if estimated_mb > max_mb:
