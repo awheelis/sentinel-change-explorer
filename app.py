@@ -20,6 +20,7 @@ from streamlit_folium import st_folium
 # Ensure src/ is on path when running from project root
 sys.path.insert(0, str(Path(__file__).parent))
 
+from src.export import create_geotiff
 from src.sentinel import load_bands, search_scenes
 from src.indices import compute_change, compute_mndwi, compute_ndbi, compute_ndvi
 from src.overture import get_overture_context
@@ -395,6 +396,23 @@ def main() -> None:
     stat_cols[1].metric(f"{INDEX_FUNCTIONS[index_choice][0]} gain", f"{pct_gain:.1f}%")
     stat_cols[2].metric(f"{INDEX_FUNCTIONS[index_choice][0]} loss", f"{pct_loss:.1f}%")
     stat_cols[3].metric("Unchanged", f"{pct_unchanged:.1f}%")
+
+    index_label = INDEX_FUNCTIONS[index_choice][0]
+    tiff_bytes = create_geotiff(
+        delta,
+        bbox,
+        index_type=index_choice,
+        before_date=before_scene["datetime"][:10],
+        after_date=after_scene["datetime"][:10],
+        before_scene_id=before_scene["id"],
+        after_scene_id=after_scene["id"],
+    )
+    st.download_button(
+        label="Download Change Raster (.tif)",
+        data=tiff_bytes,
+        file_name=f"change_{index_choice}_{before_scene['datetime'][:10]}_{after_scene['datetime'][:10]}.tif",
+        mime="image/tiff",
+    )
 
     detail_cols = st.columns(2)
     detail_cols[0].write(f"**Before:** {before_scene['id']}  \n"
