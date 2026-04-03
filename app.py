@@ -22,6 +22,7 @@ from src.indices import compute_change, compute_mndwi, compute_ndbi, compute_ndv
 from src.overture import get_overture_context
 from src.visualization import (
     build_folium_map,
+    downscale_array,
     index_to_rgba,
     true_color_image,
 )
@@ -160,7 +161,7 @@ def main() -> None:
         )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
 
-        run_button = st.button("Analyze Change", type="primary", use_container_width=True)
+        run_button = st.button("Analyze Change", type="primary", width="stretch")
 
     # ── Main Panel ────────────────────────────────────────────────────────────
     before_range = f"{before_start}/{before_end}"
@@ -304,13 +305,13 @@ def main() -> None:
     after_img = true_color_image(
         after_bands["red"], after_bands["green"], after_bands["blue"]
     )
-    heatmap_img = index_to_rgba(delta, threshold=0.05)
+    heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=0.05)
 
     # ── Panel A: True Color Comparison ────────────────────────────────────────
     st.subheader("Panel A — True Color Comparison")
     col_before, col_after = st.columns(2)
-    col_before.image(before_img, caption=f"Before — {before_scene['datetime'][:10]}", use_container_width=True)
-    col_after.image(after_img, caption=f"After — {after_scene['datetime'][:10]}", use_container_width=True)
+    col_before.image(before_img, caption=f"Before — {before_scene['datetime'][:10]}", width="stretch")
+    col_after.image(after_img, caption=f"After — {after_scene['datetime'][:10]}", width="stretch")
 
     # ── Panel D: Summary Statistics (before map to guarantee visibility) ─────
     st.subheader("Panel D — Summary Statistics")
@@ -361,7 +362,7 @@ def main() -> None:
         bbox=bbox,
         before_image=_downscale(before_img),
         after_image=_downscale(after_img),
-        heatmap_image=_downscale(heatmap_img),
+        heatmap_image=heatmap_img,
         overture_context=overture,
         show_heatmap=True,
         show_overture=show_overture,

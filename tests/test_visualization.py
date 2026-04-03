@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 from PIL import Image
-from src.visualization import true_color_image, downscale_array
+from src.visualization import true_color_image, downscale_array, index_to_rgba
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -72,3 +72,23 @@ class TestDownscaleArray:
         result = downscale_array(arr, max_dim=800)
         assert result.min() >= arr.min() - 0.05  # small interpolation tolerance
         assert result.max() <= arr.max() + 0.05
+
+
+class TestIndexToRgbaDownscaled:
+    def test_downscaled_heatmap_matches_direct(self):
+        """Downscaling delta then colormapping should produce same-size image
+        as colormapping full-res then PIL downscaling."""
+        delta = np.random.default_rng(0).uniform(-0.5, 0.5, (2000, 3000)).astype(np.float32)
+
+        # Old path: full-res colormap then PIL downscale
+        full_img = index_to_rgba(delta, threshold=0.05)
+        old_way = full_img.resize((800, 533), Image.LANCZOS)
+
+        # New path: downscale array then colormap
+        small_delta = downscale_array(delta, max_dim=800)
+        new_way = index_to_rgba(small_delta, threshold=0.05)
+
+        assert old_way.size == new_way.size
+        # Pixel values won't be identical (interpolation order differs),
+        # but both should be valid RGBA images of the same dimensions.
+        assert new_way.mode == "RGBA"
