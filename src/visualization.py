@@ -215,8 +215,17 @@ def build_folium_map(
         _image_to_bounds_overlay(heatmap_image, bbox, name="Change Heatmap", opacity=1.0).add_to(m)
 
     if overture_context is not None and show_overture:
+        # Cap feature counts to keep the folium HTML payload under
+        # Streamlit's 200 MB message-size limit.  Dense urban areas
+        # (e.g. Las Vegas) can have 300k+ buildings.
+        _MAX_BUILDINGS = 5_000
+        _MAX_SEGMENTS = 5_000
+        _MAX_PLACES = 2_000
+
         buildings = overture_context.get("building", gpd.GeoDataFrame())
         if not buildings.empty:
+            if len(buildings) > _MAX_BUILDINGS:
+                buildings = buildings.sample(n=_MAX_BUILDINGS, random_state=42)
             # Strip to geometry-only to avoid JSON serialization errors
             # from complex nested Overture properties.
             folium.GeoJson(
@@ -232,6 +241,8 @@ def build_folium_map(
 
         segments = overture_context.get("segment", gpd.GeoDataFrame())
         if not segments.empty:
+            if len(segments) > _MAX_SEGMENTS:
+                segments = segments.sample(n=_MAX_SEGMENTS, random_state=42)
             folium.GeoJson(
                 segments[["geometry"]].__geo_interface__,
                 name="Roads",
@@ -244,6 +255,8 @@ def build_folium_map(
 
         places = overture_context.get("place", gpd.GeoDataFrame())
         if not places.empty:
+            if len(places) > _MAX_PLACES:
+                places = places.sample(n=_MAX_PLACES, random_state=42)
             for _, row in places.iterrows():
                 if row.geometry and row.geometry.geom_type == "Point":
                     name_val = row.get("names", {})
