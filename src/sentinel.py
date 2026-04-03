@@ -121,8 +121,8 @@ def load_bands(
     cache_path = _BAND_CACHE_DIR / f"{cache_hash}.npz"
 
     if cache_path.exists():
-        cached = np.load(cache_path)
-        return {key: cached[key] for key in band_keys}
+        with np.load(cache_path) as cached:
+            return {key: cached[key] for key in band_keys}
 
     west, south, east, north = bbox
     arrays: dict[str, np.ndarray] = {}
