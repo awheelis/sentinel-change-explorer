@@ -4,8 +4,13 @@
 Requires internet access and unsigned S3 access (no AWS creds needed).
 Run with: pytest tests/test_sentinel_smoke.py -v -s
 """
+import shutil
+from pathlib import Path
+
 import numpy as np
 from src.sentinel import search_scenes, load_bands
+
+CACHE_DIR = Path(__file__).resolve().parent.parent / "cache" / "bands"
 
 
 def test_search_scenes_returns_results():
@@ -66,3 +71,29 @@ def test_load_bands_returns_wgs84_aligned_arrays():
     aspect = w / h
     assert 0.5 < aspect < 2.0, f"Aspect ratio {aspect:.2f} looks distorted"
     print(f"\nReprojected band shape: {h}x{w}, aspect ratio: {aspect:.2f}")
+
+
+def test_disk_cache_creates_and_reuses_file():
+    """Second call to load_bands should reuse cached .npz file."""
+    # Clear any existing cache for this test
+    if CACHE_DIR.exists():
+        shutil.rmtree(CACHE_DIR)
+
+    bbox = (-115.32, 36.08, -115.08, 36.28)
+    scenes = search_scenes(bbox=bbox, date_range="2023-06-01/2023-06-30", max_cloud_cover=50)
+    assert scenes, "Need at least one scene"
+    scene = scenes[0]
+
+    # First call: cache miss, downloads from S3
+    bands1 = load_bands(scene=scene, bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
+
+    # Cache file should exist now
+    npz_files = list(CACHE_DIR.glob("*.npz"))
+    assert len(npz_files) == 1, f"Expected 1 cache file, found {len(npz_files)}"
+
+    # Second call: cache hit, loads from disk
+    bands2 = load_bands(scene=scene, bbox=bbox, band_keys=["red", "green", "blue"], target_res=60)
+
+    for key in bands1:
+        np.testing.assert_array_equal(bands1[key], bands2[key])
+    print(f"\nCache file: {npz_files[0].name}, size: {npz_files[0].stat().st_size / 1024:.0f} KB")

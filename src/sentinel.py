@@ -9,7 +9,9 @@ Earth Search v1 asset keys for sentinel-2-l2a (confirmed):
 """
 from __future__ import annotations
 
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -18,6 +20,8 @@ from rasterio.enums import Resampling
 from rasterio.windows import from_bounds
 from rasterio.warp import transform_bounds, calculate_default_transform, reproject
 from pystac_client import Client
+
+_BAND_CACHE_DIR = Path(__file__).resolve().parent.parent / "cache" / "bands"
 
 EARTH_SEARCH_URL = "https://earth-search.aws.element84.com/v1"
 SENTINEL_COLLECTION = "sentinel-2-l2a"
@@ -111,6 +115,15 @@ def load_bands(
                 f"Available: {list(assets.keys())}"
             )
 
+    # ── Disk cache: check for cached reprojected bands ───────────────────
+    cache_key_str = f"{scene['id']}|{bbox}|{sorted(band_keys)}|{target_res}"
+    cache_hash = hashlib.md5(cache_key_str.encode()).hexdigest()
+    cache_path = _BAND_CACHE_DIR / f"{cache_hash}.npz"
+
+    if cache_path.exists():
+        cached = np.load(cache_path)
+        return {key: cached[key] for key in band_keys}
+
     west, south, east, north = bbox
     arrays: dict[str, np.ndarray] = {}
 
@@ -172,5 +185,9 @@ def load_bands(
             resampling=Resampling.bilinear,
         )
         reprojected[key] = dst_arr
+
+    # ── Save reprojected bands to disk cache ─────────────────────────────
+    _BAND_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache_path, **reprojected)
 
     return reprojected
