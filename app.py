@@ -29,6 +29,7 @@ from src.visualization import (
     change_histogram,
     downscale_array,
     index_to_rgba,
+    label_image,
     true_color_image,
 )
 
@@ -131,6 +132,29 @@ def main() -> None:
         page_icon=":earth_americas:",
         layout="wide",
     )
+    st.markdown(
+        """<style>
+        /* Sidebar section headers: stronger visual weight */
+        section[data-testid="stSidebar"] h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid rgba(255,75,75,0.4);
+            padding-bottom: 0.3rem;
+            margin-top: 1.2rem;
+        }
+        section[data-testid="stSidebar"] h3 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-top: 1rem;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
     st.title("Sentinel-2 Change Detection Explorer")
     st.caption(
         "Compare satellite imagery across two dates to detect vegetation loss, "
@@ -210,13 +234,13 @@ def main() -> None:
             st.session_state["after_end"] = _date.fromisoformat(default_after_end)
             st.session_state["index_choice"] = default_index
 
-        st.subheader("Bounding Box (WGS84)")
-        col_w, col_e = st.columns(2)
-        col_s, col_n = st.columns(2)
-        west = col_w.number_input("West", key="west", format="%.4f")
-        east = col_e.number_input("East", key="east", format="%.4f")
-        south = col_s.number_input("South", key="south", format="%.4f")
-        north = col_n.number_input("North", key="north", format="%.4f")
+        with st.expander("Bounding Box (WGS84)", expanded=False):
+            col_w, col_e = st.columns(2)
+            col_s, col_n = st.columns(2)
+            west = col_w.number_input("West", key="west", format="%.4f")
+            east = col_e.number_input("East", key="east", format="%.4f")
+            south = col_s.number_input("South", key="south", format="%.4f")
+            north = col_n.number_input("North", key="north", format="%.4f")
         bbox = (west, south, east, north)
 
         st.subheader("Before Date Range")
@@ -376,8 +400,10 @@ def main() -> None:
     # ── Panel A: True Color Comparison ────────────────────────────────────────
     st.subheader("Panel A — True Color Comparison")
     col_before, col_after = st.columns(2)
-    col_before.image(before_img, caption=f"Before — {before_scene['datetime'][:10]}", width="stretch")
-    col_after.image(after_img, caption=f"After — {after_scene['datetime'][:10]}", width="stretch")
+    before_labeled = label_image(before_img, f"Before — {before_scene['datetime'][:10]}")
+    after_labeled = label_image(after_img, f"After — {after_scene['datetime'][:10]}")
+    col_before.image(before_labeled, use_container_width=True)
+    col_after.image(after_labeled, use_container_width=True)
 
     # ── Panel D: Summary Statistics (before map to guarantee visibility) ─────
     st.subheader("Panel D — Summary Statistics")
@@ -423,16 +449,6 @@ def main() -> None:
 
     st.pyplot(change_histogram(delta, threshold=THRESHOLD))
 
-    if overture:
-        st.caption(
-            f"Overture context: {len(overture.get('building', []))} buildings, "
-            f"{len(overture.get('segment', []))} road segments, "
-            f"{len(overture.get('place', []))} places"
-        )
-
-    # ── Panel B+C: Change Heatmap + Overture Context ──────────────────────────
-    st.subheader(f"Panel B+C — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
-
     # Downscale overlay images to cap folium HTML payload size
     MAX_OVERLAY_DIM = 800
     def _downscale(img):
@@ -442,17 +458,36 @@ def main() -> None:
         scale = MAX_OVERLAY_DIM / max(w, h)
         return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
-    folium_map = build_folium_map(
+    # ── Panel B: Change Detection Heatmap ────────────────────────────────────
+    st.subheader(f"Panel B — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
+
+    panel_b_map = build_folium_map(
         bbox=bbox,
         before_image=_downscale(before_img),
         after_image=_downscale(after_img),
         heatmap_image=heatmap_img,
-        overture_context=overture,
         show_heatmap=True,
-        show_overture=show_overture,
+        show_overture=False,
         enable_draw=True,
     )
-    map_data = st_folium(folium_map, width="100%", height=500, returned_objects=["last_active_drawing"])
+    map_data = st_folium(panel_b_map, width="100%", height=500, returned_objects=["last_active_drawing"])
+
+    # ── Panel C: Overture Maps Context ───────────────────────────────────────
+    if overture and show_overture:
+        st.subheader("Panel C — Overture Maps Context")
+        st.caption(
+            f"{len(overture.get('building', []))} buildings, "
+            f"{len(overture.get('segment', []))} road segments, "
+            f"{len(overture.get('place', []))} places"
+        )
+        panel_c_map = build_folium_map(
+            bbox=bbox,
+            heatmap_image=heatmap_img,
+            overture_context=overture,
+            show_heatmap=True,
+            show_overture=True,
+        )
+        st_folium(panel_c_map, width="100%", height=500)
 
     # Read drawn geometry and update bbox session state
     if map_data and map_data.get("last_active_drawing"):

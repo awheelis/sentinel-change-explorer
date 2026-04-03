@@ -92,6 +92,53 @@ def true_color_image(
     return Image.fromarray(rgb_uint8, mode="RGB")
 
 
+def label_image(
+    image: Image.Image,
+    label: str,
+    font_size: int = 18,
+) -> Image.Image:
+    """Burn a bold text label onto the top-left corner of a PIL Image.
+
+    Returns a new image; the original is not mutated.
+
+    Args:
+        image: RGB PIL Image to label.
+        label: Text to render. Empty string returns image unchanged.
+        font_size: Approximate font size in pixels.
+
+    Returns:
+        New RGB PIL Image with the label overlaid.
+    """
+    if not label:
+        return image.copy()
+
+    from PIL import ImageDraw, ImageFont
+
+    img = image.copy()
+    draw = ImageDraw.Draw(img)
+
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+    except (OSError, IOError):
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+
+    bbox = draw.textbbox((0, 0), label, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    padding = 6
+    # Semi-transparent background rectangle
+    bg_box = (0, 0, text_w + padding * 2, text_h + padding * 2)
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+    overlay_draw.rectangle(bg_box, fill=(0, 0, 0, 140))
+    overlay_draw.text((padding, padding), label, fill=(255, 255, 255, 255), font=font)
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    return img
+
+
 def index_to_rgba(
     delta: np.ndarray,
     threshold: float = 0.05,

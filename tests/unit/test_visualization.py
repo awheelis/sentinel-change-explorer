@@ -7,7 +7,7 @@ from src.visualization import true_color_image, downscale_array, index_to_rgba, 
 import folium
 import geopandas as gpd
 from shapely.geometry import box, Point, LineString
-from src.visualization import build_folium_map, _image_to_bounds_overlay
+from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -190,6 +190,22 @@ class TestBuildFoliumMap:
         html = m._repr_html_()
         assert "Draw" in html or "draw" in html
 
+    def test_overture_only_no_imagery(self):
+        """Panel C use case: Overture layers only, no imagery overlays."""
+        m = build_folium_map(
+            bbox=BBOX,
+            overture_context=_make_overture_context(),
+            show_heatmap=False,
+            show_overture=True,
+        )
+        html = m._repr_html_()
+        assert "Buildings" in html
+        assert "Roads" in html
+        # No imagery overlays
+        assert "Before" not in html
+        assert "After" not in html
+        assert "Heatmap" not in html
+
 
 class TestChangeHistogram:
     def _make_delta(self, shape=(200, 200)):
@@ -223,3 +239,39 @@ class TestImageToBoundsOverlay:
         img = _make_rgb_image()
         overlay = _image_to_bounds_overlay(img, BBOX, name="test")
         assert isinstance(overlay, folium.raster_layers.ImageOverlay)
+
+
+class TestLabelImage:
+    def test_returns_rgb_image_same_size(self):
+        """Labeled image should be same size and mode as input."""
+        img = _make_rgb_image(size=(200, 300))
+        result = label_image(img, "Before — 2019-07-10")
+        assert isinstance(result, Image.Image)
+        assert result.mode == "RGB"
+        assert result.size == img.size
+
+    def test_modifies_pixels(self):
+        """Label should change some pixels in the top region."""
+        img = _make_rgb_image(size=(200, 300))
+        original_arr = np.array(img).copy()
+        result = label_image(img, "Before — 2019-07-10")
+        result_arr = np.array(result)
+        # Top 40 rows should have some modified pixels (label area)
+        top_region_changed = not np.array_equal(
+            original_arr[:40, :, :], result_arr[:40, :, :]
+        )
+        assert top_region_changed, "Label should modify pixels in the top region"
+
+    def test_empty_label_returns_unchanged(self):
+        """Empty string label should return image unchanged."""
+        img = _make_rgb_image(size=(200, 300))
+        original_arr = np.array(img).copy()
+        result = label_image(img, "")
+        assert np.array_equal(original_arr, np.array(result))
+
+    def test_does_not_mutate_input(self):
+        """Original image should not be modified."""
+        img = _make_rgb_image(size=(200, 300))
+        original_arr = np.array(img).copy()
+        label_image(img, "Test Label")
+        assert np.array_equal(original_arr, np.array(img))
