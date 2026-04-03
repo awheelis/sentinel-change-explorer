@@ -24,6 +24,7 @@ def true_color_image(
     green: np.ndarray,
     blue: np.ndarray,
     percentile_clip: tuple[float, float] = (2.0, 98.0),
+    gamma: float = 0.85,
 ) -> Image.Image:
     """Convert raw Sentinel-2 uint16 R/G/B arrays to a displayable RGB PIL Image.
 
@@ -35,6 +36,8 @@ def true_color_image(
         green: Green band array (B03), uint16.
         blue: Blue band array (B02), uint16.
         percentile_clip: Lower and upper percentile for contrast stretch.
+        gamma: Gamma correction exponent. Values < 1 brighten midtones,
+            values > 1 darken them. Default 0.85 for Sentinel-2 imagery.
 
     Returns:
         RGB PIL Image sized to match the input arrays.
@@ -43,6 +46,9 @@ def true_color_image(
         raise ValueError(
             f"Band shapes must match: red={red.shape}, green={green.shape}, blue={blue.shape}"
         )
+
+    if gamma <= 0:
+        raise ValueError(f"gamma must be positive, got {gamma}")
 
     if percentile_clip[0] >= percentile_clip[1]:
         raise ValueError(
@@ -57,6 +63,8 @@ def true_color_image(
         hi = lo + 1.0
 
     stretched = np.clip((stack - lo) / (hi - lo), 0.0, 1.0)
+    if gamma != 1.0:
+        stretched = np.power(stretched, gamma)
     rgb_uint8 = (stretched * 255).astype(np.uint8)
     return Image.fromarray(rgb_uint8, mode="RGB")
 
