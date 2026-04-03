@@ -69,8 +69,9 @@ The dropdown opens on "Custom…" by default, which shows four raw coordinate in
 
 ---
 
-### 11. Satellite true-color imagery is significantly underexposed
-In every screenshot captured during testing, the before/after true-color composites appear very dark — almost black in shadow areas with muted midtones. Sentinel-2 surface reflectance values need aggressive brightness stretching for visual display (typical 0–2000 reflectance mapped to 0–255). The current rescaling appears to clip too conservatively, making the imagery look like a night-time shot rather than a daytime satellite view. The "wow" panel is dim and hard to interpret.
+### ~~11. Satellite true-color imagery is significantly underexposed~~ ✅ RESOLVED
+
+**Fix:** Added gamma correction (default γ=0.85) to `true_color_image()` in `src/visualization.py`. After the existing percentile stretch, `np.power(stretched, gamma)` brightens midtones without blowing out highlights. The gamma parameter is exposed as a function argument for tunability. Sentinel-2 imagery now renders with natural daytime brightness.
 
 ---
 
@@ -129,7 +130,7 @@ There is no Streamlit config file. The browser tab shows "localhost" as the page
 | Title renders correctly | ✅ Fixed (emoji removed) |
 | `requirements.txt` complete | ✅ Fixed (rioxarray not used) |
 | UX during loading | ✅ Fixed (st.status with step counts) |
-| Image quality | ⚠️ Underexposed |
+| Image quality | ✅ Fixed (gamma correction γ=0.85) |
 | Code runs at all | ✅ Las Vegas preset works |
 | Overture Maps integration | ✅ Data fetches and caches |
 | STAC search works | ✅ Correct scenes selected |
