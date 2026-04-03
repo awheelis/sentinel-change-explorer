@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 from PIL import Image
-from src.visualization import true_color_image
+from src.visualization import true_color_image, downscale_array
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -49,3 +49,26 @@ class TestTrueColorImage:
             true_color_image(red, green, blue, gamma=0.0)
         with pytest.raises(ValueError, match="gamma must be positive"):
             true_color_image(red, green, blue, gamma=-0.5)
+
+
+class TestDownscaleArray:
+    def test_no_op_when_small(self):
+        """Arrays already under max_dim should be returned unchanged."""
+        arr = np.random.default_rng(0).uniform(-0.5, 0.5, (100, 200)).astype(np.float32)
+        result = downscale_array(arr, max_dim=800)
+        assert result is arr
+
+    def test_downscales_large_array(self):
+        """A 2000x3000 array should be scaled to max_dim on its longest side."""
+        arr = np.random.default_rng(0).uniform(-0.5, 0.5, (2000, 3000)).astype(np.float32)
+        result = downscale_array(arr, max_dim=800)
+        assert max(result.shape) == 800
+        assert result.shape == (533, 800)  # 2000*(800/3000)=533.3 → 533
+        assert result.dtype == np.float32
+
+    def test_preserves_value_range(self):
+        """Downscaled values should stay within original min/max."""
+        arr = np.random.default_rng(0).uniform(-0.5, 0.5, (2000, 2000)).astype(np.float32)
+        result = downscale_array(arr, max_dim=800)
+        assert result.min() >= arr.min() - 0.05  # small interpolation tolerance
+        assert result.max() <= arr.max() + 0.05

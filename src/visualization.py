@@ -111,6 +111,33 @@ def index_to_rgba(
     return Image.fromarray(rgba_uint8, mode="RGBA")
 
 
+def downscale_array(
+    arr: np.ndarray,
+    max_dim: int = 800,
+) -> np.ndarray:
+    """Downscale a 2D float32 array so its longest side is at most max_dim.
+
+    Uses PIL bilinear resize on the raw array, avoiding the need to create
+    a full-resolution RGBA colormapped image first.
+
+    Args:
+        arr: 2D float32 array to downscale.
+        max_dim: Maximum allowed dimension (width or height).
+
+    Returns:
+        Downscaled float32 array, or the original if already small enough.
+    """
+    h, w = arr.shape
+    if max(h, w) <= max_dim:
+        return arr
+    scale = max_dim / max(h, w)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    img = Image.fromarray(arr, mode="F")
+    resized = img.resize((new_w, new_h), Image.BILINEAR)
+    return np.asarray(resized, dtype=np.float32)
+
+
 def _image_to_bounds_overlay(
     image: Image.Image,
     bbox: tuple[float, float, float, float],
