@@ -3,6 +3,10 @@ import numpy as np
 import pytest
 from PIL import Image
 from src.visualization import true_color_image, downscale_array, index_to_rgba
+import folium
+import geopandas as gpd
+from shapely.geometry import box, Point, LineString
+from src.visualization import build_folium_map, _image_to_bounds_overlay
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -92,3 +96,96 @@ class TestIndexToRgbaDownscaled:
         # Pixel values won't be identical (interpolation order differs),
         # but both should be valid RGBA images of the same dimensions.
         assert new_way.mode == "RGBA"
+
+
+BBOX = (-115.20, 36.10, -115.15, 36.15)
+
+
+def _make_rgb_image(size=(100, 100)):
+    """Create a small synthetic RGB PIL Image."""
+    arr = np.random.RandomState(0).randint(0, 255, (*size, 3), dtype=np.uint8)
+    return Image.fromarray(arr, mode="RGB")
+
+
+def _make_rgba_image(size=(100, 100)):
+    """Create a small synthetic RGBA PIL Image."""
+    arr = np.random.RandomState(0).randint(0, 255, (*size, 4), dtype=np.uint8)
+    return Image.fromarray(arr, mode="RGBA")
+
+
+def _make_overture_context(n_buildings=5, n_segments=3, n_places=2):
+    """Create a synthetic overture context dict."""
+    buildings = gpd.GeoDataFrame(
+        geometry=[box(-115.19 + i * 0.001, 36.11, -115.189 + i * 0.001, 36.112) for i in range(n_buildings)],
+        crs="EPSG:4326",
+    )
+    segments = gpd.GeoDataFrame(
+        geometry=[LineString([(-115.19 + i * 0.01, 36.11), (-115.18 + i * 0.01, 36.12)]) for i in range(n_segments)],
+        crs="EPSG:4326",
+    )
+    places = gpd.GeoDataFrame(
+        {"names": [{"primary": f"Place {i}"} for i in range(n_places)],
+         "geometry": [Point(-115.18 + i * 0.01, 36.12) for i in range(n_places)]},
+        crs="EPSG:4326",
+    )
+    return {"building": buildings, "segment": segments, "place": places}
+
+
+class TestBuildFoliumMap:
+    def test_returns_folium_map(self):
+        m = build_folium_map(
+            bbox=BBOX,
+            before_image=_make_rgb_image(),
+            after_image=_make_rgb_image(),
+            heatmap_image=_make_rgba_image(),
+            overture_context=_make_overture_context(),
+        )
+        assert isinstance(m, folium.Map)
+
+    def test_layer_count_with_all_inputs(self):
+        """before + after + heatmap + overture layers + LayerControl."""
+        m = build_folium_map(
+            bbox=BBOX,
+            before_image=_make_rgb_image(),
+            after_image=_make_rgb_image(),
+            heatmap_image=_make_rgba_image(),
+            overture_context=_make_overture_context(),
+            show_heatmap=True,
+            show_overture=True,
+        )
+        children = list(m._children.values())
+        assert len(children) >= 5
+
+    def test_no_overture_omits_vector_layers(self):
+        m = build_folium_map(
+            bbox=BBOX,
+            before_image=_make_rgb_image(),
+            after_image=_make_rgb_image(),
+            heatmap_image=_make_rgba_image(),
+            show_overture=False,
+        )
+        html = m._repr_html_()
+        assert "Buildings" not in html
+        assert "Roads" not in html
+
+    def test_none_images_returns_valid_map(self):
+        m = build_folium_map(bbox=BBOX)
+        assert isinstance(m, folium.Map)
+
+    def test_overture_sampling_caps_buildings(self):
+        """When >5000 buildings passed, map should still render."""
+        large_overture = _make_overture_context(n_buildings=10_000, n_segments=0, n_places=0)
+        m = build_folium_map(
+            bbox=BBOX,
+            overture_context=large_overture,
+            show_overture=True,
+        )
+        html = m._repr_html_()
+        assert "Buildings" in html
+
+
+class TestImageToBoundsOverlay:
+    def test_returns_image_overlay(self):
+        img = _make_rgb_image()
+        overlay = _image_to_bounds_overlay(img, BBOX, name="test")
+        assert isinstance(overlay, folium.raster_layers.ImageOverlay)
