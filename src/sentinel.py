@@ -9,6 +9,7 @@ Earth Search v1 asset keys for sentinel-2-l2a (confirmed):
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import numpy as np
@@ -111,8 +112,8 @@ def load_bands(
     west, south, east, north = bbox
     arrays: dict[str, np.ndarray] = {}
 
+    # Determine output shape and CRS from the reference (first) band
     with rasterio.Env(**_RASTERIO_ENV):
-        # Determine output shape and CRS from the reference (first) band
         with rasterio.open(assets[band_keys[0]]) as ref_ds:
             dst_crs = ref_ds.crs
             native_bounds = transform_bounds("EPSG:4326", dst_crs, west, south, east, north)
@@ -123,21 +124,26 @@ def load_bands(
             scale = native_res_m / target_res
             out_h = max(1, int(round(win.height * scale)))
             out_w = max(1, int(round(win.width * scale)))
-        # NOTE: output shape is derived from band_keys[0]'s native resolution.
-        # Callers should pass a 10m band (red/green/blue/nir) as band_keys[0]
-        # to get the target_res scaling correct.
 
-        for key in band_keys:
-            href = assets[key]
-            with rasterio.open(href) as ds:
-                native_bounds_k = transform_bounds("EPSG:4326", dst_crs, west, south, east, north)
+    # Load all bands in parallel for faster S3 reads
+    def _read_band(key: str) -> np.ndarray:
+        with rasterio.Env(**_RASTERIO_ENV):
+            with rasterio.open(assets[key]) as ds:
+                native_bounds_k = transform_bounds(
+                    "EPSG:4326", dst_crs, west, south, east, north,
+                )
                 window = from_bounds(*native_bounds_k, ds.transform)
-                data = ds.read(
+                return ds.read(
                     1,
                     window=window,
                     out_shape=(out_h, out_w),
                     resampling=Resampling.bilinear,
                 )
-            arrays[key] = data
+
+    with ThreadPoolExecutor(max_workers=len(band_keys)) as executor:
+        futures = {executor.submit(_read_band, key): key for key in band_keys}
+        for future in as_completed(futures):
+            key = futures[future]
+            arrays[key] = future.result()
 
     return arrays

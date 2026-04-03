@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import streamlit as st
+from PIL import Image
 from streamlit_folium import st_folium
 
 # Ensure src/ is on path when running from project root
@@ -65,42 +66,15 @@ def compute_index_for_bands(
     return fn(bands[band_order[0]], bands[band_order[1]])
 
 
-def fetch_scene_data(
-    bbox: tuple[float, float, float, float],
-    date_range: str,
-    max_cloud: float,
-    label: str,
-) -> tuple[dict | None, dict[str, np.ndarray] | None, str]:
-    """Search for and load a Sentinel-2 scene.
-
-    Returns:
-        Tuple of (scene_meta, bands_dict, status_message).
-        scene_meta and bands_dict are None if no scene found.
-    """
-    with st.spinner(f"Searching for {label} scene…"):
-        scenes = search_scenes(bbox=bbox, date_range=date_range, max_cloud_cover=max_cloud)
-
-    if not scenes:
-        return None, None, f"No {label} scenes found with cloud cover < {max_cloud:.0f}%"
-
-    scene = scenes[0]
-    try:
-        with st.spinner(f"Loading {label} bands from S3…"):
-            bands = load_bands(scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10)
-    except Exception as exc:
-        return None, None, f"Failed to load {label} bands: {exc}"
-
-    return scene, bands, f"Loaded {label}: {scene['id']} ({scene['cloud_cover']:.1f}% cloud)"
-
 
 def main() -> None:
     """Entry point for the Streamlit app."""
     st.set_page_config(
         page_title="Sentinel-2 Change Explorer",
-        page_icon="🛰️",
+        page_icon=":earth_americas:",
         layout="wide",
     )
-    st.title("🛰️ Sentinel-2 Change Detection Explorer")
+    st.title("Sentinel-2 Change Detection Explorer")
     st.caption(
         "Compare satellite imagery across two dates to detect vegetation loss, "
         "urbanization, and water change using Sentinel-2 L2A imagery."
@@ -189,7 +163,19 @@ def main() -> None:
         run_button = st.button("Analyze Change", type="primary", use_container_width=True)
 
     # ── Main Panel ────────────────────────────────────────────────────────────
-    if not run_button:
+    before_range = f"{before_start}/{before_end}"
+    after_range = f"{after_start}/{after_end}"
+
+    # Invalidate cached data when location / date inputs change
+    cache_key = f"{bbox}|{before_range}|{after_range}|{max_cloud}"
+    if st.session_state.get("_cache_key") != cache_key:
+        for k in ("before_scene", "after_scene", "before_bands", "after_bands", "overture"):
+            st.session_state.pop(k, None)
+
+    has_data = "before_scene" in st.session_state and "after_scene" in st.session_state
+
+    # Show instructions when no data is available and button not clicked
+    if not has_data and not run_button:
         st.info(
             "Select a preset location or enter custom coordinates, choose date ranges, "
             "and click **Analyze Change** to begin."
@@ -208,7 +194,7 @@ def main() -> None:
     bbox_width_deg = east - west
     bbox_height_deg = north - south
     center_lat = (south + north) / 2.0
-    target_res = 10  # metres — must match fetch_scene_data
+    target_res = 10  # metres
     pixels_per_band = (
         bbox_width_deg * bbox_height_deg
         * math.cos(math.radians(center_lat))
@@ -227,47 +213,80 @@ def main() -> None:
         )
         return
 
-    before_range = f"{before_start}/{before_end}"
-    after_range = f"{after_start}/{after_end}"
+    st.session_state["_cache_key"] = cache_key
 
-    # Session-state caching: re-fetch only if inputs changed
-    cache_key = f"{bbox}|{before_range}|{after_range}|{max_cloud}"
-    cached = st.session_state.get("cache_key")
-    if cached != cache_key:
-        st.session_state["cache_key"] = cache_key
-        st.session_state.pop("before_scene", None)
-        st.session_state.pop("after_scene", None)
-        st.session_state.pop("before_bands", None)
-        st.session_state.pop("after_bands", None)
-        st.session_state.pop("overture", None)
+    # ── Fetch data with step-by-step progress ────────────────────────────────
+    needs_before = "before_scene" not in st.session_state
+    needs_after = "after_scene" not in st.session_state
+    needs_overture = show_overture and "overture" not in st.session_state
 
-    if "before_scene" not in st.session_state:
-        scene, bands, msg = fetch_scene_data(bbox, before_range, max_cloud, "before")
-        if scene is None:
-            st.error(msg)
-            return
-        st.session_state["before_scene"] = scene
-        st.session_state["before_bands"] = bands
-        st.success(msg)
+    if needs_before or needs_after or needs_overture:
+        total = needs_before + needs_after + needs_overture
+        step = 0
+        with st.status("Analyzing change detection...", expanded=True) as status:
+            if needs_before:
+                step += 1
+                st.write(f"Step {step}/{total} — Searching for best before scene...")
+                scenes = search_scenes(
+                    bbox=bbox, date_range=before_range, max_cloud_cover=max_cloud,
+                )
+                if not scenes:
+                    st.error(f"No before scenes found with cloud cover < {max_cloud:.0f}%")
+                    status.update(label="Analysis failed", state="error")
+                    return
+                scene = scenes[0]
+                st.write(
+                    f"Step {step}/{total} — Loading before bands from S3 "
+                    f"({scene['id']}, {scene['cloud_cover']:.1f}% cloud)..."
+                )
+                try:
+                    bands = load_bands(
+                        scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10,
+                    )
+                except Exception as exc:
+                    st.error(f"Failed to load before bands: {exc}")
+                    status.update(label="Analysis failed", state="error")
+                    return
+                st.session_state["before_scene"] = scene
+                st.session_state["before_bands"] = bands
 
-    if "after_scene" not in st.session_state:
-        scene, bands, msg = fetch_scene_data(bbox, after_range, max_cloud, "after")
-        if scene is None:
-            st.error(msg)
-            return
-        st.session_state["after_scene"] = scene
-        st.session_state["after_bands"] = bands
-        st.success(msg)
+            if needs_after:
+                step += 1
+                st.write(f"Step {step}/{total} — Searching for best after scene...")
+                scenes = search_scenes(
+                    bbox=bbox, date_range=after_range, max_cloud_cover=max_cloud,
+                )
+                if not scenes:
+                    st.error(f"No after scenes found with cloud cover < {max_cloud:.0f}%")
+                    status.update(label="Analysis failed", state="error")
+                    return
+                scene = scenes[0]
+                st.write(
+                    f"Step {step}/{total} — Loading after bands from S3 "
+                    f"({scene['id']}, {scene['cloud_cover']:.1f}% cloud)..."
+                )
+                try:
+                    bands = load_bands(
+                        scene=scene, bbox=bbox, band_keys=ALL_BAND_KEYS, target_res=10,
+                    )
+                except Exception as exc:
+                    st.error(f"Failed to load after bands: {exc}")
+                    status.update(label="Analysis failed", state="error")
+                    return
+                st.session_state["after_scene"] = scene
+                st.session_state["after_bands"] = bands
+
+            if needs_overture:
+                step += 1
+                st.write(f"Step {step}/{total} — Fetching Overture Maps context...")
+                st.session_state["overture"] = get_overture_context(bbox=bbox)
+
+            status.update(label="Analysis complete!", state="complete", expanded=False)
 
     before_scene = st.session_state["before_scene"]
     after_scene = st.session_state["after_scene"]
     before_bands = st.session_state["before_bands"]
     after_bands = st.session_state["after_bands"]
-
-    if "overture" not in st.session_state and show_overture:
-        with st.spinner("Fetching Overture Maps context…"):
-            st.session_state["overture"] = get_overture_context(bbox=bbox)
-
     overture = st.session_state.get("overture") if show_overture else None
 
     # ── Compute indices ───────────────────────────────────────────────────────
@@ -290,20 +309,7 @@ def main() -> None:
     col_before.image(before_img, caption=f"Before — {before_scene['datetime'][:10]}", use_container_width=True)
     col_after.image(after_img, caption=f"After — {after_scene['datetime'][:10]}", use_container_width=True)
 
-    # ── Panel B+C: Change Heatmap + Overture Context ──────────────────────────
-    st.subheader(f"Panel B+C — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
-    folium_map = build_folium_map(
-        bbox=bbox,
-        before_image=before_img,
-        after_image=after_img,
-        heatmap_image=heatmap_img,
-        overture_context=overture,
-        show_heatmap=True,
-        show_overture=show_overture,
-    )
-    st_folium(folium_map, width="100%", height=500, returned_objects=[])
-
-    # ── Panel D: Summary Statistics ───────────────────────────────────────────
+    # ── Panel D: Summary Statistics (before map to guarantee visibility) ─────
     st.subheader("Panel D — Summary Statistics")
 
     area_deg2 = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
@@ -335,6 +341,29 @@ def main() -> None:
             f"{len(overture.get('segment', []))} road segments, "
             f"{len(overture.get('place', []))} places"
         )
+
+    # ── Panel B+C: Change Heatmap + Overture Context ──────────────────────────
+    st.subheader(f"Panel B+C — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
+
+    # Downscale overlay images to cap folium HTML payload size
+    MAX_OVERLAY_DIM = 800
+    def _downscale(img):
+        w, h = img.size
+        if max(w, h) <= MAX_OVERLAY_DIM:
+            return img
+        scale = MAX_OVERLAY_DIM / max(w, h)
+        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+    folium_map = build_folium_map(
+        bbox=bbox,
+        before_image=_downscale(before_img),
+        after_image=_downscale(after_img),
+        heatmap_image=_downscale(heatmap_img),
+        overture_context=overture,
+        show_heatmap=True,
+        show_overture=show_overture,
+    )
+    st_folium(folium_map, width="100%", height=500, returned_objects=[])
 
 
 if __name__ == "__main__":
