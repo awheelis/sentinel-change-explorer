@@ -1,4 +1,4 @@
-"""Tests for preset cache warm-up logic."""
+"""Unit tests for app.py logic: warm-up, bbox validation, memory guard, index dispatch."""
 from unittest.mock import patch
 
 
@@ -95,26 +95,7 @@ def test_warm_preset_caches_survives_failures():
         assert mock_overture.call_count >= 1  # overture for working preset
 
 
-def test_warm_called_before_main_ui(monkeypatch):
-    """The warm-up should be called early in main(), before the sidebar renders."""
-    call_order = []
-
-    def fake_warm():
-        call_order.append("warm")
-
-    def fake_set_page_config(**kwargs):
-        call_order.append("set_page_config")
-
-    def fake_title(t):
-        call_order.append("title")
-
-    # We can't fully run main() without Streamlit, but we can verify
-    # warm_preset_caches is defined and callable
-    from app import warm_preset_caches
-    assert callable(warm_preset_caches)
-
-
-def test_warm_preset_caches_calls_progress_callback():
+def test_warm_preset_caches_progress_callback():
     """on_progress should be called once per completed future."""
     fake_presets = [
         {
@@ -148,33 +129,3 @@ def test_warm_preset_caches_calls_progress_callback():
     assert len(progress_calls) == 3
     # Last call should show all complete
     assert progress_calls[-1] == (3, 3)
-
-
-from concurrent.futures import ThreadPoolExecutor
-
-
-def test_concurrent_fetch_pattern():
-    """Verify the concurrent fetch pattern works correctly with futures."""
-    results = {}
-
-    def fetch_before():
-        return {"id": "before-scene", "bands": {"red": "data"}}
-
-    def fetch_after():
-        return {"id": "after-scene", "bands": {"red": "data"}}
-
-    def fetch_overture():
-        return {"building": [], "segment": [], "place": []}
-
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_before = executor.submit(fetch_before)
-        future_after = executor.submit(fetch_after)
-        future_overture = executor.submit(fetch_overture)
-
-        results["before"] = future_before.result()
-        results["after"] = future_after.result()
-        results["overture"] = future_overture.result()
-
-    assert results["before"]["id"] == "before-scene"
-    assert results["after"]["id"] == "after-scene"
-    assert "building" in results["overture"]
