@@ -15,8 +15,9 @@ def test_fetch_buildings_returns_geodataframe():
     """Should fetch building footprints for a small Las Vegas bbox."""
     # Small bbox to keep download fast
     bbox = (-115.20, 36.10, -115.15, 36.15)
+    # Bypass cache to ensure a real network fetch (empty results may be cached)
     with assert_within(15, "building fetch"):
-        gdf = fetch_overture_layer("building", bbox=bbox)
+        gdf = fetch_overture_layer("building", bbox=bbox, use_cache=False)
     assert isinstance(gdf, gpd.GeoDataFrame), "Expected GeoDataFrame"
     print(f"\nFetched {len(gdf)} buildings for bbox {bbox}")
     # Even in Las Vegas there should be buildings in this box
