@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
@@ -30,8 +29,6 @@ _CONTEXT_LAYERS = ("building", "segment", "place")
 BBox = Tuple[float, float, float, float]  # (west, south, east, north)
 
 _TRANSIENT_ERRORS = (TimeoutError, ConnectionError, OSError)
-_MAX_RETRIES = 3
-_RETRY_DELAYS = (2, 4, 8)
 _LAYER_TIMEOUT = 15  # seconds per layer fetch
 _TIMEOUT_AND_TRANSIENT = (FuturesTimeoutError,) + _TRANSIENT_ERRORS
 
@@ -99,39 +96,28 @@ def fetch_overture_layer(
         logger.warning("overturemaps package not installed — skipping layer '%s'", layer)
         return gpd.GeoDataFrame()
 
-    last_exc = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            logger.debug(
-                "Fetching Overture layer '%s' for bbox %s (attempt %d)",
-                layer, bbox, attempt + 1,
-            )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(core.geodataframe, layer, bbox=bbox)
-                    gdf: gpd.GeoDataFrame = future.result(timeout=_LAYER_TIMEOUT)
-            last_exc = None
-            break
-        except _TIMEOUT_AND_TRANSIENT as exc:
-            last_exc = exc
-            if attempt < _MAX_RETRIES - 1:
-                delay = _RETRY_DELAYS[attempt]
-                logger.warning(
-                    "Overture fetch attempt %d failed (%s), retrying in %ds…",
-                    attempt + 1, exc, delay,
-                )
-                time.sleep(delay)
-        except (ValueError, TypeError, ArithmeticError) as exc:
-            logger.warning("Failed to fetch Overture layer '%s': %s", layer, exc)
-            return gpd.GeoDataFrame()
-
-    if last_exc is not None:
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        logger.debug(
+            "Fetching Overture layer '%s' for bbox %s",
+            layer, bbox,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            future = pool.submit(core.geodataframe, layer, bbox=bbox)
+            gdf: gpd.GeoDataFrame = future.result(timeout=_LAYER_TIMEOUT)
+    except _TIMEOUT_AND_TRANSIENT as exc:
         logger.warning(
-            "All %d Overture fetch attempts failed for layer '%s': %s",
-            _MAX_RETRIES, layer, last_exc,
+            "Overture fetch failed for layer '%s': %s",
+            layer, exc,
         )
         gdf = gpd.GeoDataFrame()
+    except (ValueError, TypeError, ArithmeticError) as exc:
+        logger.warning("Failed to fetch Overture layer '%s': %s", layer, exc)
+        pool.shutdown(wait=False, cancel_futures=True)
+        return gpd.GeoDataFrame()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     # --- cache write (including empty results to avoid repeated slow S3 scans) ---
     if use_cache:

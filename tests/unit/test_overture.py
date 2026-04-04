@@ -128,8 +128,7 @@ def test_fetch_overture_layer_timeout_returns_empty():
     mock_core.geodataframe.side_effect = _slow_fetch
 
     with patch("src.overture._import_overture_core", return_value=mock_core), \
-         patch("src.overture._LAYER_TIMEOUT", 1), \
-         patch("src.overture.time.sleep"):  # don't wait on retry delays
+         patch("src.overture._LAYER_TIMEOUT", 1):
         result = fetch_overture_layer("building", bbox=(-115.2, 36.1, -115.1, 36.2), use_cache=False)
 
     assert isinstance(result, gpd.GeoDataFrame)
@@ -153,29 +152,20 @@ def test_get_overture_context_fetches_in_parallel():
     assert max(call_times) - min(call_times) < 0.2, "Layers should be fetched in parallel"
 
 
-def test_fetch_overture_layer_retries_on_transient_failure():
-    """Should retry up to 3 times on transient network errors."""
-    from unittest.mock import call
-    from src.overture import fetch_overture_layer
-
-    mock_gdf = gpd.GeoDataFrame({"geometry": []})
+def test_fetch_overture_layer_fails_fast_on_transient_error():
+    """Should fail after a single attempt on transient network errors (no retries)."""
     mock_core = MagicMock()
-    # Fail twice with transient error, succeed on third
-    mock_core.geodataframe.side_effect = [
-        ConnectionError("timeout"),
-        ConnectionError("timeout"),
-        mock_gdf,
-    ]
+    mock_core.geodataframe.side_effect = ConnectionError("timeout")
 
-    with patch("src.overture._import_overture_core", return_value=mock_core), \
-         patch("src.overture.time.sleep"):  # don't actually sleep in tests
+    with patch("src.overture._import_overture_core", return_value=mock_core):
         result = fetch_overture_layer(
             "building",
             bbox=(-115.2, 36.1, -115.1, 36.2),
             use_cache=False,
         )
-    assert mock_core.geodataframe.call_count == 3
+    assert mock_core.geodataframe.call_count == 1
     assert isinstance(result, gpd.GeoDataFrame)
+    assert len(result) == 0
 
 
 def test_keyboard_interrupt_propagates():
