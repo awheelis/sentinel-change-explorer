@@ -275,3 +275,12 @@ class TestLabelImage:
         original_arr = np.array(img).copy()
         label_image(img, "Test Label")
         assert np.array_equal(original_arr, np.array(img))
+
+
+def test_build_folium_map_uses_fit_bounds():
+    """Map should use fit_bounds instead of hardcoded zoom_start."""
+    from src.visualization import build_folium_map
+    bbox = (-115.20, 36.10, -115.15, 36.15)
+    m = build_folium_map(bbox=bbox)
+    html = m._repr_html_()
+    assert "fitBounds" in html

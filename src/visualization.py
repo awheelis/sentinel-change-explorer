@@ -320,9 +320,9 @@ def build_folium_map(
 
     m = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=12,
         tiles="CartoDB positron",
     )
+    m.fit_bounds([[south, west], [north, east]])
 
     if before_image is not None:
         _image_to_bounds_overlay(before_image, bbox, name="Before (True Color)", opacity=0.9).add_to(m)
