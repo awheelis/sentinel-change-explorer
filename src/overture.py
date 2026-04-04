@@ -13,6 +13,7 @@ import hashlib
 import logging
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Tuple
 
@@ -31,6 +32,8 @@ BBox = Tuple[float, float, float, float]  # (west, south, east, north)
 _TRANSIENT_ERRORS = (TimeoutError, ConnectionError, OSError)
 _MAX_RETRIES = 3
 _RETRY_DELAYS = (2, 4, 8)
+_LAYER_TIMEOUT = 15  # seconds per layer fetch
+_TIMEOUT_AND_TRANSIENT = (FuturesTimeoutError,) + _TRANSIENT_ERRORS
 
 
 def _import_overture_core():
@@ -105,10 +108,12 @@ def fetch_overture_layer(
             )
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                gdf: gpd.GeoDataFrame = core.geodataframe(layer, bbox=bbox)
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(core.geodataframe, layer, bbox=bbox)
+                    gdf: gpd.GeoDataFrame = future.result(timeout=_LAYER_TIMEOUT)
             last_exc = None
             break
-        except _TRANSIENT_ERRORS as exc:
+        except _TIMEOUT_AND_TRANSIENT as exc:
             last_exc = exc
             if attempt < _MAX_RETRIES - 1:
                 delay = _RETRY_DELAYS[attempt]
@@ -147,20 +152,13 @@ def get_overture_context(
     """Fetch building, road-segment, and place layers for a bounding box.
 
     Calls :func:`fetch_overture_layer` for each of the three context layers
-    (``"building"``, ``"segment"``, ``"place"``).  Individual layer failures
-    are logged as warnings and represented by empty GeoDataFrames so the
-    caller always receives a complete dict.
-
-    Args:
-        bbox: Bounding box as ``(west, south, east, north)`` in WGS-84
-            decimal degrees.
-        use_cache: Passed through to :func:`fetch_overture_layer`.
-
-    Returns:
-        Dictionary with keys ``"building"``, ``"segment"``, and ``"place"``,
-        each mapping to a :class:`geopandas.GeoDataFrame`.
+    concurrently using a thread pool.  Individual layer failures are logged
+    as warnings and represented by empty GeoDataFrames so the caller always
+    receives a complete dict.
     """
-    return {
-        layer: fetch_overture_layer(layer, bbox=bbox, use_cache=use_cache)
-        for layer in _CONTEXT_LAYERS
-    }
+    with ThreadPoolExecutor(max_workers=len(_CONTEXT_LAYERS)) as pool:
+        futures = {
+            layer: pool.submit(fetch_overture_layer, layer, bbox=bbox, use_cache=use_cache)
+            for layer in _CONTEXT_LAYERS
+        }
+        return {layer: fut.result() for layer, fut in futures.items()}

@@ -99,6 +99,42 @@ class TestGetOvertureContext:
         assert mock_fetch.call_count == 3
 
 
+def test_fetch_overture_layer_timeout_returns_empty():
+    """A slow-but-alive connection should be killed by the timeout wrapper."""
+    import time as _time
+    mock_core = MagicMock()
+
+    def _slow_fetch(*a, **kw):
+        _time.sleep(30)
+        return gpd.GeoDataFrame()
+
+    mock_core.geodataframe.side_effect = _slow_fetch
+
+    with patch("src.overture._import_overture_core", return_value=mock_core), \
+         patch("src.overture._LAYER_TIMEOUT", 1):
+        result = fetch_overture_layer("building", bbox=(-115.2, 36.1, -115.1, 36.2), use_cache=False)
+
+    assert isinstance(result, gpd.GeoDataFrame)
+    assert len(result) == 0
+
+
+def test_get_overture_context_fetches_in_parallel():
+    """All three layers should be fetched concurrently."""
+    import time as _time
+    call_times = []
+
+    def _track_fetch(layer, bbox, use_cache=True):
+        call_times.append(_time.monotonic())
+        _time.sleep(0.3)
+        return gpd.GeoDataFrame()
+
+    with patch("src.overture.fetch_overture_layer", side_effect=_track_fetch):
+        result = get_overture_context(bbox=(-115.2, 36.1, -115.1, 36.2))
+
+    assert set(result.keys()) == {"building", "segment", "place"}
+    assert max(call_times) - min(call_times) < 0.2, "Layers should be fetched in parallel"
+
+
 def test_fetch_overture_layer_retries_on_transient_failure():
     """Should retry up to 3 times on transient network errors."""
     from unittest.mock import call

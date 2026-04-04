@@ -384,11 +384,16 @@ def main() -> None:
                 if future_overture is not None:
                     st.write("Fetching Overture Maps context…")
                     try:
-                        st.session_state["overture"] = future_overture.result()
+                        st.session_state["overture"] = future_overture.result(timeout=30)
                         st.write("Overture context loaded")
+                    except TimeoutError:
+                        logger.warning("Overture context fetch timed out")
+                        st.write("Overture context timed out — proceeding without it")
+                        st.session_state["overture"] = None
                     except Exception as exc:
                         logger.warning("Overture context fetch failed: %s", exc)
                         st.write("Overture context unavailable")
+                        st.session_state["overture"] = None
 
             status.update(label="Analysis complete!", state="complete", expanded=False)
 
