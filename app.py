@@ -264,10 +264,18 @@ def main() -> None:
     before_range = f"{before_start}/{before_end}"
     after_range = f"{after_start}/{after_end}"
 
-    # Invalidate cached data when location / date inputs change
     cache_key = f"{bbox}|{before_range}|{after_range}|{max_cloud}"
-    if st.session_state.get("_cache_key") != cache_key:
-        for k in ("before_scene", "after_scene", "before_bands", "after_bands", "overture"):
+
+    # Initialize per-preset results store
+    if "_results" not in st.session_state:
+        st.session_state["_results"] = {}
+
+    # Load cached results for current key if available
+    cached = st.session_state["_results"].get(cache_key, {})
+    for k in ("before_scene", "after_scene", "before_bands", "after_bands", "overture"):
+        if k in cached:
+            st.session_state[k] = cached[k]
+        else:
             st.session_state.pop(k, None)
 
     has_data = "before_scene" in st.session_state and "after_scene" in st.session_state
@@ -327,8 +335,6 @@ def main() -> None:
         )
         return
 
-    st.session_state["_cache_key"] = cache_key
-
     # ── Fetch data concurrently ──────────────────────────────────────────────
     needs_before = "before_scene" not in st.session_state
     needs_after = "after_scene" not in st.session_state
@@ -385,6 +391,13 @@ def main() -> None:
                         st.write("Overture context unavailable")
 
             status.update(label="Analysis complete!", state="complete", expanded=False)
+
+        # Cache results for this preset key
+        st.session_state["_results"][cache_key] = {
+            k: st.session_state[k]
+            for k in ("before_scene", "after_scene", "before_bands", "after_bands", "overture")
+            if k in st.session_state
+        }
 
     before_scene = st.session_state["before_scene"]
     after_scene = st.session_state["after_scene"]
