@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.export import create_geotiff
 from src.sentinel import load_bands, search_scenes
 from src.indices import compute_change, compute_evi, compute_mndwi, compute_ndbi, compute_ndvi
+from src.normalization import normalize_pif
 from src.overture import get_overture_context
 from src.visualization import (
     build_folium_map,
@@ -324,6 +325,12 @@ def main() -> None:
             key="gamma",
             help="Adjust brightness of true-color images. Lower = brighter.",
         )
+        normalize = st.checkbox(
+            "Radiometric normalization",
+            value=True,
+            key="normalize",
+            help="PIF-based relative normalization to reduce false positives from illumination differences between dates.",
+        )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
@@ -488,6 +495,17 @@ def main() -> None:
     after_bands = st.session_state["after_bands"]
     overture = st.session_state.get("overture") if show_overture else None
 
+    # ── Radiometric normalization ────────────────────────────────────────────
+    pif_info = None
+    if st.session_state.get("normalize", True):
+        after_bands, pif_info = normalize_pif(before_bands, after_bands)
+        if pif_info["skipped"]:
+            st.warning(
+                f"Radiometric normalization skipped — only {pif_info['pif_count']} "
+                f"pseudo-invariant pixels found ({pif_info['pif_fraction']:.1%}). "
+                f"This may indicate widespread change across the entire AOI."
+            )
+
     # ── Compute indices ───────────────────────────────────────────────────────
     before_index = compute_index_for_bands(index_choice, before_bands)
     after_index = compute_index_for_bands(index_choice, after_bands)
@@ -592,6 +610,20 @@ def main() -> None:
     threshold_mode = "auto / Otsu" if st.session_state.get("auto_threshold", False) else "manual"
     st.caption(f"Threshold: {THRESHOLD:.3f} ({threshold_mode})")
 
+    detail_cols = st.columns(2)
+    detail_cols[0].write(f"**Before:** {before_scene['id']}  \n"
+                         f"Date: {before_scene['datetime'][:10]}  \n"
+                         f"Cloud: {before_scene['cloud_cover']:.1f}%")
+    detail_cols[1].write(f"**After:** {after_scene['id']}  \n"
+                         f"Date: {after_scene['datetime'][:10]}  \n"
+                         f"Cloud: {after_scene['cloud_cover']:.1f}%")
+
+    if pif_info is not None and not pif_info["skipped"]:
+        st.caption(
+            f"Radiometric normalization: {pif_info['pif_count']:,} PIFs "
+            f"({pif_info['pif_fraction']:.1%} of pixels)"
+        )
+
     # All indices summary (spec requirement: show all three simultaneously)
     st.markdown("**All Indices Summary**")
     idx_cols = st.columns(len(INDEX_FUNCTIONS))
@@ -623,14 +655,6 @@ def main() -> None:
         file_name=f"change_{index_choice}_{before_scene['datetime'][:10]}_{after_scene['datetime'][:10]}.tif",
         mime="image/tiff",
     )
-
-    detail_cols = st.columns(2)
-    detail_cols[0].write(f"**Before:** {before_scene['id']}  \n"
-                         f"Date: {before_scene['datetime'][:10]}  \n"
-                         f"Cloud: {before_scene['cloud_cover']:.1f}%")
-    detail_cols[1].write(f"**After:** {after_scene['id']}  \n"
-                         f"Date: {after_scene['datetime'][:10]}  \n"
-                         f"Cloud: {after_scene['cloud_cover']:.1f}%")
 
     # ── Data Quality ─────────────────────────────────────────────────────
     _RATING_ICONS = {"green": "\U0001f7e2", "yellow": "\U0001f7e1", "red": "\U0001f534"}
