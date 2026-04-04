@@ -249,3 +249,10 @@ def test_ndvi_no_saturation():
     before_index = np.full((100, 100), 0.5, dtype=np.float32)
     p90 = np.percentile(before_index, 90)
     assert p90 <= 0.75
+
+
+def test_default_colormaps_cover_all_indices():
+    """Every index in INDEX_FUNCTIONS should have a default colormap."""
+    from app import INDEX_FUNCTIONS, DEFAULT_COLORMAPS
+    for key in INDEX_FUNCTIONS:
+        assert key in DEFAULT_COLORMAPS, f"Missing default colormap for index '{key}'"

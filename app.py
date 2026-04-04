@@ -41,6 +41,15 @@ INDEX_FUNCTIONS = {
     "evi": ("EVI", compute_evi, ["nir", "red", "blue"]),
 }
 
+DEFAULT_COLORMAPS = {
+    "ndvi": "RdYlGn",
+    "evi": "RdYlGn",
+    "ndbi": "PuOr",
+    "mndwi": "BrBG",
+}
+
+COLORMAP_OPTIONS = ["RdYlGn", "BrBG", "PuOr", "RdBu", "RdYlBu", "PiYG", "PRGn", "coolwarm"]
+
 # Bands needed for all indices + true color
 ALL_BAND_KEYS = ["red", "green", "blue", "nir", "swir16"]
 
@@ -261,11 +270,19 @@ def main() -> None:
                 key="threshold",
                 help="Minimum change magnitude to classify as gain/loss.",
             )
+        # Auto-select colormap when index changes (unless user manually overrode)
+        _prev_index = st.session_state.get("_prev_index_for_cmap")
+        if _prev_index != index_choice:
+            current_cmap = st.session_state.get("colormap", DEFAULT_COLORMAPS.get(index_choice, "RdBu"))
+            if _prev_index is None or current_cmap == DEFAULT_COLORMAPS.get(_prev_index, "RdBu"):
+                st.session_state["colormap"] = DEFAULT_COLORMAPS.get(index_choice, "RdBu")
+            st.session_state["_prev_index_for_cmap"] = index_choice
+
         colormap = st.selectbox(
             "Colormap",
-            ["RdBu", "RdYlBu", "PiYG"],
+            COLORMAP_OPTIONS,
             key="colormap",
-            help="Color scheme for the change heatmap.",
+            help="Color scheme for the change heatmap. Auto-selected per index; override manually.",
         )
         gamma = st.slider(
             "Gamma correction",
