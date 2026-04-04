@@ -131,13 +131,18 @@ def fetch_overture_layer(
             "All %d Overture fetch attempts failed for layer '%s': %s",
             _MAX_RETRIES, layer, last_exc,
         )
-        return gpd.GeoDataFrame()
+        gdf = gpd.GeoDataFrame()
 
-    # --- cache write ---
-    if use_cache and len(gdf) > 0:
+    # --- cache write (including empty results to avoid repeated slow S3 scans) ---
+    if use_cache:
         try:
             _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            gdf.to_parquet(cache_file)
+            if len(gdf) > 0:
+                gdf.to_parquet(cache_file)
+            else:
+                # Write an empty parquet so future calls get a cache hit
+                # instead of re-scanning S3 for minutes.
+                gpd.GeoDataFrame({"geometry": []}).to_parquet(cache_file)
             logger.debug("Cached %d features to %s", len(gdf), cache_file)
         except OSError as exc:
             logger.warning("Failed to write cache file %s: %s", cache_file, exc)

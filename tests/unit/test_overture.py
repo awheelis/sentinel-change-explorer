@@ -86,6 +86,23 @@ class TestFetchOvertureLayer:
         assert isinstance(result, gpd.GeoDataFrame)
         assert len(result) == 0
 
+    def test_empty_result_is_cached(self, tmp_path):
+        """Empty results should be cached to avoid repeated slow S3 scans."""
+        mock_core = MagicMock()
+        mock_core.geodataframe.return_value = gpd.GeoDataFrame()
+
+        with patch("src.overture._CACHE_DIR", tmp_path), \
+             patch("src.overture._import_overture_core", return_value=mock_core):
+            # First call — fetches from network
+            result1 = fetch_overture_layer("building", bbox=BBOX)
+            assert len(result1) == 0
+            assert mock_core.geodataframe.call_count == 1
+
+            # Second call — should hit cache, NOT call geodataframe again
+            result2 = fetch_overture_layer("building", bbox=BBOX)
+            assert len(result2) == 0
+            assert mock_core.geodataframe.call_count == 1  # still 1
+
 
 class TestGetOvertureContext:
     def test_returns_all_three_keys(self):
