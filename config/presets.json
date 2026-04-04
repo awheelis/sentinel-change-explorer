@@ -7,7 +7,8 @@
     "after_range": ["2023-05-01", "2023-07-31"],
     "default_index": "ndbi",
     "notes": "NDBI highlights new impervious surfaces. Red glow = new construction.",
-    "what_to_expect": "In the true-color comparison you should see tan desert in the 'before' image replaced by grey rooftops and street grids in the 'after' image. The NDBI heatmap will light up red over newly paved and built areas. Overture building footprints will cluster where the new subdivisions appeared."
+    "what_to_expect": "In the true-color comparison you should see tan desert in the 'before' image replaced by grey rooftops and street grids in the 'after' image. The NDBI heatmap will light up red over newly paved and built areas. Overture building footprints will cluster where the new subdivisions appeared.",
+    "threshold": 0.08
   },
   {
     "name": "Tonga Volcanic Eruption",
@@ -17,7 +18,8 @@
     "after_range": ["2022-03-01", "2022-05-31"],
     "default_index": "ndvi",
     "notes": "Post-eruption island is smaller. MNDWI shows water extent change.",
-    "what_to_expect": "The 'before' image shows a small green island connecting two older landmasses. After the eruption most of the island is gone — replaced by open ocean. Switch to MNDWI to see the water-extent change. Overture data will be sparse here since it is a remote uninhabited island."
+    "what_to_expect": "The 'before' image shows a small green island connecting two older landmasses. After the eruption most of the island is gone — replaced by open ocean. Switch to MNDWI to see the water-extent change. Overture data will be sparse here since it is a remote uninhabited island.",
+    "threshold": 0.12
   },
   {
     "name": "Amazon Deforestation (Rondônia)",
@@ -27,7 +29,8 @@
     "after_range": ["2023-07-01", "2023-09-30"],
     "default_index": "ndvi",
     "notes": "Strong NDVI loss signal. Best viewed in dry season (Jul-Sep) for cloud-free imagery.",
-    "what_to_expect": "Expect dense green canopy in the 'before' image with characteristic fishbone-pattern clearings expanding in the 'after' image. The NDVI heatmap will show strong red patches where forest was replaced by bare soil or pasture. Roads from Overture trace the edges of cleared areas."
+    "what_to_expect": "Expect dense green canopy in the 'before' image with characteristic fishbone-pattern clearings expanding in the 'after' image. The NDVI heatmap will show strong red patches where forest was replaced by bare soil or pasture. Roads from Overture trace the edges of cleared areas.",
+    "threshold": 0.15
   },
   {
     "name": "Aral Sea Retreat",
@@ -37,7 +40,8 @@
     "after_range": ["2023-07-01", "2023-09-30"],
     "default_index": "mndwi",
     "notes": "MNDWI best captures water loss. Blue = water gain, red = water loss (expect red).",
-    "what_to_expect": "The 'before' true-color image should show blue-green water along the shoreline, while the 'after' image reveals dry, white salt-crusted lakebed. The MNDWI heatmap will be predominantly red where the water has retreated. Overture data is minimal in this remote region."
+    "what_to_expect": "The 'before' true-color image should show blue-green water along the shoreline, while the 'after' image reveals dry, white salt-crusted lakebed. The MNDWI heatmap will be predominantly red where the water has retreated. Overture data is minimal in this remote region.",
+    "threshold": 0.12
   },
   {
     "name": "Turkish Earthquake (Antakya)",
@@ -47,6 +51,7 @@
     "after_range": ["2023-03-01", "2023-04-30"],
     "default_index": "ndbi",
     "notes": "NDBI decrease indicates building collapse (rubble scatters differently). Keep cloud cover < 30%.",
-    "what_to_expect": "True-color changes are subtle at Sentinel-2 resolution, but you may notice lighter tones where rubble replaced intact buildings. The NDBI heatmap shows mixed signals — decreases where structures collapsed and increases where debris was cleared into open lots. Overture building footprints highlight the dense urban fabric that was affected."
+    "what_to_expect": "True-color changes are subtle at Sentinel-2 resolution, but you may notice lighter tones where rubble replaced intact buildings. The NDBI heatmap shows mixed signals — decreases where structures collapsed and increases where debris was cleared into open lots. Overture building footprints highlight the dense urban fabric that was affected.",
+    "threshold": 0.10
   }
 ]

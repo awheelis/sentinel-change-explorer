@@ -183,6 +183,7 @@ def main() -> None:
             st.session_state["after_start"] = _date.fromisoformat("2023-07-01")
             st.session_state["after_end"] = _date.fromisoformat("2023-09-30")
             st.session_state["index_choice"] = "ndvi"
+            st.session_state["threshold"] = 0.15  # Amazon default
 
         preset_choice = st.selectbox("Preset location", preset_names, index=3)
         if preset_choice != "Custom…":
@@ -193,6 +194,7 @@ def main() -> None:
             default_after_start = preset["after_range"][0]
             default_after_end = preset["after_range"][1]
             default_index = preset.get("default_index", "ndvi")
+            default_threshold = preset.get("threshold", 0.10)
             if "what_to_expect" in preset:
                 st.info(f"**What to expect:** {preset['what_to_expect']}")
             if "notes" in preset:
@@ -202,6 +204,7 @@ def main() -> None:
             default_before_start, default_before_end = "2019-05-01", "2019-07-31"
             default_after_start, default_after_end = "2023-05-01", "2023-07-31"
             default_index = "ndvi"
+            default_threshold = 0.10
 
         # Reset widget values when preset changes
         if st.session_state.get("_last_preset") != preset_choice:
@@ -216,6 +219,7 @@ def main() -> None:
             st.session_state["after_start"] = _date.fromisoformat(default_after_start)
             st.session_state["after_end"] = _date.fromisoformat(default_after_end)
             st.session_state["index_choice"] = default_index
+            st.session_state["threshold"] = default_threshold
             st.session_state.pop("_auto_run_done", None)
 
         with st.expander("Bounding Box (WGS84)", expanded=False):
@@ -245,6 +249,14 @@ def main() -> None:
             key="index_choice",
         )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
+        st.slider(
+            "Change threshold",
+            min_value=0.01,
+            max_value=0.30,
+            step=0.01,
+            key="threshold",
+            help="Minimum change magnitude to classify as gain/loss. Higher = less noise.",
+        )
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
 
@@ -378,6 +390,7 @@ def main() -> None:
     before_index = compute_index_for_bands(index_choice, before_bands)
     after_index = compute_index_for_bands(index_choice, after_bands)
     delta = compute_change(before=before_index, after=after_index)
+    THRESHOLD = st.session_state.get("threshold", 0.10)
 
     # ── Build images ──────────────────────────────────────────────────────────
     before_img = true_color_image(
@@ -386,7 +399,7 @@ def main() -> None:
     after_img = true_color_image(
         after_bands["red"], after_bands["green"], after_bands["blue"]
     )
-    heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=0.05)
+    heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=THRESHOLD)
 
     # ── Panel A: True Color Comparison ────────────────────────────────────────
     st.subheader("Panel A — True Color Comparison")
@@ -403,7 +416,6 @@ def main() -> None:
     center_lat_rad = math.radians((bbox[1] + bbox[3]) / 2)
     area_km2 = area_deg2 * 111.0 * 111.0 * math.cos(center_lat_rad)
 
-    THRESHOLD = 0.05
     pct_gain = float(np.mean(delta > THRESHOLD) * 100)
     pct_loss = float(np.mean(delta < -THRESHOLD) * 100)
     pct_unchanged = 100.0 - pct_gain - pct_loss
