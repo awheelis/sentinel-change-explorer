@@ -111,7 +111,8 @@ def test_fetch_overture_layer_timeout_returns_empty():
     mock_core.geodataframe.side_effect = _slow_fetch
 
     with patch("src.overture._import_overture_core", return_value=mock_core), \
-         patch("src.overture._LAYER_TIMEOUT", 1):
+         patch("src.overture._LAYER_TIMEOUT", 1), \
+         patch("src.overture.time.sleep"):  # don't wait on retry delays
         result = fetch_overture_layer("building", bbox=(-115.2, 36.1, -115.1, 36.2), use_cache=False)
 
     assert isinstance(result, gpd.GeoDataFrame)
