@@ -43,6 +43,7 @@ def create_geotiff(
             dtype="float32",
             crs="EPSG:4326",
             transform=transform,
+            compress="lzw",
         ) as ds:
             ds.write(delta.astype(np.float32), 1)
 

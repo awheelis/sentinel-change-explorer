@@ -73,6 +73,12 @@ class TestCreateGeotiff:
             assert pytest.approx(bounds.right, abs=1e-6) == sample_bbox[2]
             assert pytest.approx(bounds.top, abs=1e-6) == sample_bbox[3]
 
+    def test_geotiff_is_compressed(self, sample_delta, sample_bbox):
+        """GeoTIFF should use LZW compression."""
+        tiff_bytes = create_geotiff(sample_delta, sample_bbox)
+        with rasterio.open(io.BytesIO(tiff_bytes)) as ds:
+            assert ds.compression is not None
+
     def test_pixel_values_roundtrip(self, sample_delta, sample_bbox):
         """Data written should match data read back."""
         tiff_bytes = create_geotiff(sample_delta, sample_bbox)
