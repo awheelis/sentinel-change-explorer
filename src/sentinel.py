@@ -143,6 +143,10 @@ def load_bands(
             out_h = max(1, int(round(win.height * scale)))
             out_w = max(1, int(round(win.width * scale)))
 
+    # Bands that contain categorical class labels (not continuous reflectance)
+    # must use nearest-neighbor resampling to avoid blending class values.
+    _NEAREST_RESAMPLE_KEYS = {"scl"}
+
     # Load all bands in parallel for faster S3 reads
     def _read_band(key: str) -> np.ndarray:
         with rasterio.Env(**_RASTERIO_ENV):
@@ -151,11 +155,16 @@ def load_bands(
                     "EPSG:4326", dst_crs, west, south, east, north,
                 )
                 window = from_bounds(*native_bounds_k, ds.transform)
+                resamp = (
+                    Resampling.nearest
+                    if key in _NEAREST_RESAMPLE_KEYS
+                    else Resampling.bilinear
+                )
                 return ds.read(
                     1,
                     window=window,
                     out_shape=(out_h, out_w),
-                    resampling=Resampling.bilinear,
+                    resampling=resamp,
                 )
 
     with ThreadPoolExecutor(max_workers=len(band_keys)) as executor:
@@ -185,6 +194,11 @@ def load_bands(
     reprojected: dict[str, np.ndarray] = {}
     for key, arr in arrays.items():
         dst_arr = np.zeros((dst_height, dst_width), dtype=arr.dtype)
+        resamp = (
+            Resampling.nearest
+            if key in _NEAREST_RESAMPLE_KEYS
+            else Resampling.bilinear
+        )
         reproject(
             source=arr,
             destination=dst_arr,
@@ -192,7 +206,7 @@ def load_bands(
             src_crs=dst_crs,
             dst_transform=dst_transform,
             dst_crs=dst_crs_4326,
-            resampling=Resampling.bilinear,
+            resampling=resamp,
         )
         reprojected[key] = dst_arr
 

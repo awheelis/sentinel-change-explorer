@@ -176,10 +176,12 @@ def index_to_rgba(
     # intermediate float64 allocation (≈ 2× faster on 2000×2000 inputs).
     rgba_uint8 = cmap(norm(delta), bytes=True)  # shape (H, W, 4), dtype uint8
 
-    # Make near-zero pixels transparent; apply requested alpha to the rest.
-    mask = np.abs(delta) <= threshold
-    rgba_uint8[mask, 3] = 0
-    rgba_uint8[~mask, 3] = int(alpha * 255)
+    # Make near-zero and NaN pixels transparent; apply requested alpha to the rest.
+    nan_mask = np.isnan(delta)
+    unchanged_mask = np.abs(delta) <= threshold
+    transparent = nan_mask | unchanged_mask
+    rgba_uint8[transparent, 3] = 0
+    rgba_uint8[~transparent, 3] = int(alpha * 255)
 
     return Image.fromarray(rgba_uint8, mode="RGBA")
 
@@ -204,8 +206,13 @@ def change_histogram(
         A matplotlib Figure containing the histogram.
     """
     flat = delta.ravel()
+    flat = flat[np.isfinite(flat)]
 
     fig, ax = plt.subplots()
+    if len(flat) == 0:
+        ax.text(0.5, 0.5, "No valid pixels", ha="center", va="center", transform=ax.transAxes)
+        fig.tight_layout()
+        return fig
     weights = np.ones_like(flat) / len(flat) * 100
     counts, edges, patches = ax.hist(
         flat, bins=bins, weights=weights, edgecolor="black", linewidth=0.3,

@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.export import create_geotiff
 from src.sentinel import load_bands, search_scenes
 from src.indices import compute_change, compute_evi, compute_mndwi, compute_ndbi, compute_ndvi
+from src.masking import apply_mask, build_scl_mask, mask_percentage, union_masks
 from src.normalization import normalize_pif
 from src.overture import get_overture_context
 from src.visualization import (
@@ -51,8 +52,8 @@ DEFAULT_COLORMAPS = {
 
 COLORMAP_OPTIONS = ["RdYlGn", "BrBG", "PuOr", "RdBu", "RdYlBu", "PiYG", "PRGn", "coolwarm"]
 
-# Bands needed for all indices + true color
-ALL_BAND_KEYS = ["red", "green", "blue", "nir", "swir16"]
+# Bands needed for all indices + true color + cloud masking
+ALL_BAND_KEYS = ["red", "green", "blue", "nir", "swir16", "scl"]
 
 
 @st.cache_data
@@ -331,6 +332,13 @@ def main() -> None:
             key="normalize",
             help="PIF-based relative normalization to reduce false positives from illumination differences between dates.",
         )
+        apply_scl_mask = st.checkbox(
+            "Cloud/shadow masking (SCL)",
+            value=True,
+            key="apply_scl_mask",
+            help="Mask pixels classified as clouds or shadows using Sentinel-2's "
+                 "Scene Classification Layer before computing indices.",
+        )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
@@ -495,6 +503,33 @@ def main() -> None:
     after_bands = st.session_state["after_bands"]
     overture = st.session_state.get("overture") if show_overture else None
 
+    # ── SCL Cloud/Shadow Masking ────────────────────────────────────────────
+    scl_info = None
+    if st.session_state.get("apply_scl_mask", True):
+        before_scl = before_bands.pop("scl", None)
+        after_scl = after_bands.pop("scl", None)
+        if before_scl is not None and after_scl is not None:
+            before_mask = build_scl_mask(before_scl)
+            after_mask = build_scl_mask(after_scl)
+            combined_mask = union_masks(before_mask, after_mask)
+            before_bands = apply_mask(before_bands, combined_mask)
+            after_bands = apply_mask(after_bands, combined_mask)
+            scl_info = {
+                "before_pct": mask_percentage(before_mask),
+                "after_pct": mask_percentage(after_mask),
+                "combined_pct": mask_percentage(combined_mask),
+            }
+            if scl_info["combined_pct"] > 50:
+                st.warning(
+                    f"**{scl_info['combined_pct']:.0f}% of pixels masked** due to "
+                    f"clouds/shadows. Results may be unreliable. "
+                    f"Consider selecting a date range with lower cloud cover."
+                )
+    else:
+        # Remove SCL from band dicts so it doesn't interfere with index computation
+        before_bands.pop("scl", None)
+        after_bands.pop("scl", None)
+
     # ── Radiometric normalization ────────────────────────────────────────────
     pif_info = None
     if st.session_state.get("normalize", True):
@@ -598,8 +633,14 @@ def main() -> None:
     center_lat_rad = math.radians((bbox[1] + bbox[3]) / 2)
     area_km2 = area_deg2 * 111.0 * 111.0 * math.cos(center_lat_rad)
 
-    pct_gain = float(np.mean(delta > THRESHOLD) * 100)
-    pct_loss = float(np.mean(delta < -THRESHOLD) * 100)
+    valid = np.isfinite(delta)
+    n_valid = valid.sum()
+    if n_valid > 0:
+        pct_gain = float(np.sum((delta > THRESHOLD) & valid) / n_valid * 100)
+        pct_loss = float(np.sum((delta < -THRESHOLD) & valid) / n_valid * 100)
+    else:
+        pct_gain = 0.0
+        pct_loss = 0.0
     pct_unchanged = 100.0 - pct_gain - pct_loss
 
     stat_cols = st.columns(4)
@@ -618,6 +659,13 @@ def main() -> None:
                          f"Date: {after_scene['datetime'][:10]}  \n"
                          f"Cloud: {after_scene['cloud_cover']:.1f}%")
 
+    if scl_info is not None:
+        st.caption(
+            f"SCL masking: before {scl_info['before_pct']:.1f}%, "
+            f"after {scl_info['after_pct']:.1f}%, "
+            f"combined {scl_info['combined_pct']:.1f}% pixels masked"
+        )
+
     if pif_info is not None and not pif_info["skipped"]:
         st.caption(
             f"Radiometric normalization: {pif_info['pif_count']:,} PIFs "
@@ -635,8 +683,10 @@ def main() -> None:
             idx_before = compute_index_for_bands(idx_key, before_bands)
             idx_after = compute_index_for_bands(idx_key, after_bands)
             idx_delta = compute_change(before=idx_before, after=idx_after)
-            idx_gain = float(np.mean(idx_delta > THRESHOLD) * 100)
-            idx_loss = float(np.mean(idx_delta < -THRESHOLD) * 100)
+            idx_valid = np.isfinite(idx_delta)
+            idx_n = idx_valid.sum()
+            idx_gain = float(np.sum((idx_delta > THRESHOLD) & idx_valid) / idx_n * 100) if idx_n > 0 else 0.0
+            idx_loss = float(np.sum((idx_delta < -THRESHOLD) & idx_valid) / idx_n * 100) if idx_n > 0 else 0.0
             col.metric(f"{idx_name} gain", f"{idx_gain:.1f}%")
             col.metric(f"{idx_name} loss", f"{idx_loss:.1f}%")
 
