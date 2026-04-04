@@ -276,6 +276,16 @@ def main() -> None:
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
 
+        st.divider()
+        if st.button("Clear Disk Cache", type="secondary"):
+            import shutil
+            cache_dir = Path(__file__).parent / "cache"
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+            st.session_state["_results"] = {}
+            st.toast("Cache cleared!")
+            st.rerun()
+
     # ── Main Panel ────────────────────────────────────────────────────────────
     before_range = f"{before_start}/{before_end}"
     after_range = f"{after_start}/{after_end}"
