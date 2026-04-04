@@ -5,14 +5,14 @@ Chromium browser, and verifies that all four panels render correctly after
 clicking "Analyze Change."
 
 Usage:
-    # From the repo root, with the venv activated:
-    python tests/e2e_visual_test.py
+    # From the repo root:
+    uv run python tests/e2e_visual_test.py
 
     # Or via pytest (collected as a module-level test):
-    pytest tests/e2e_visual_test.py -v -s
+    uv run pytest tests/e2e_visual_test.py -v -s
 
 Prerequisites:
-    pip install playwright && playwright install chromium
+    uv add --dev playwright && uv run playwright install chromium
 
 Environment variables:
     STREAMLIT_PORT  — port to run Streamlit on (default: 8599)

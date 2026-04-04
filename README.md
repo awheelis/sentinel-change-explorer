@@ -20,17 +20,22 @@ footprints, roads, and POIs provide ground-truth context.
 
 ## Install
 
+This project uses [uv](https://docs.astral.sh/uv/) for dependency and
+environment management. Install uv, then:
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 ```
 
-Requires Python 3.10+. No API keys needed — all data sources are free and open.
+This creates `.venv/` and installs all dependencies (including dev tools)
+from `pyproject.toml` / `uv.lock`. Requires Python 3.10+ (uv will fetch
+one automatically if needed). No API keys needed — all data sources are
+free and open.
 
 ## Run
 
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 Then open [http://localhost:8501](http://localhost:8501).
@@ -50,10 +55,10 @@ Tests are organized into three tiers. Unit and performance tests run offline in
 under 5 seconds; integration tests hit real AWS/STAC endpoints and need internet.
 
 ```bash
-pytest tests/unit/ tests/perf/         # fast, no network (~3s)
-pytest -m network                      # integration tests (requires internet)
-pytest                                 # everything
-python tests/e2e_visual_test.py        # visual E2E via headless Chromium (~35-90s)
+uv run pytest tests/unit/ tests/perf/     # fast, no network (~3s)
+uv run pytest -m network                  # integration tests (requires internet)
+uv run pytest                             # everything
+uv run python tests/e2e_visual_test.py    # visual E2E via headless Chromium (~35-90s)
 ```
 
 For a detailed visual E2E testing procedure (install steps, timing expectations,

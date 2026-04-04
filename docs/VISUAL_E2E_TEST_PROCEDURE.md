@@ -11,15 +11,15 @@
 cd /path/to/sentinel-change-explorer
 
 # 1. Install deps (first time only)
-pip install -r requirements.txt --break-system-packages
-pip install playwright --break-system-packages
-python -m playwright install chromium
+uv sync
+uv add --dev playwright
+uv run playwright install chromium
 
 # 2. Unit tests (always run first — ~7s, no network)
-python -m pytest tests/unit/ -v --tb=short
+uv run pytest tests/unit/ -v --tb=short
 
 # 3. E2E visual test (~35s with warm cache, ~90s cold)
-python tests/e2e_visual_test.py
+uv run python tests/e2e_visual_test.py
 ```
 
 ---
@@ -29,7 +29,7 @@ python tests/e2e_visual_test.py
 Run these first. If they fail, stop — there's a code-level regression.
 
 ```bash
-python -m pytest tests/unit/ -v --tb=short
+uv run pytest tests/unit/ -v --tb=short
 ```
 
 **Expected:** 61 tests pass in <10s. No network required.
@@ -53,7 +53,7 @@ python -m pytest tests/unit/ -v --tb=short
 ### How to run
 
 ```bash
-python tests/e2e_visual_test.py
+uv run python tests/e2e_visual_test.py
 ```
 
 ### Expected output
@@ -163,7 +163,7 @@ print(list(c.get_collections()))
 
 The default E2E test only tests the Amazon Deforestation preset (the Streamlit default). To test other presets, modify the test or use this manual procedure:
 
-1. Start Streamlit: `SKIP_WARMUP=1 streamlit run app.py --server.port 8599 --server.headless true`
+1. Start Streamlit: `SKIP_WARMUP=1 uv run streamlit run app.py --server.port 8599 --server.headless true`
 2. In the Playwright script, after page load, change the preset dropdown:
    ```python
    # Click the preset selectbox and choose a different preset
@@ -189,7 +189,7 @@ The default E2E test only tests the Amazon Deforestation preset (the Streamlit d
 These hit real AWS/STAC endpoints. Run when you need to verify the full data pipeline works end-to-end, not just the UI.
 
 ```bash
-python -m pytest tests/integration/ -v -m network --tb=short
+uv run pytest tests/integration/ -v -m network --tb=short
 ```
 
 **Expected:** All pass. Failures usually mean transient network issues — retry once before investigating.
@@ -199,11 +199,11 @@ python -m pytest tests/integration/ -v -m network --tb=short
 ## Condensed Checklist (Copy-Paste for Quick Runs)
 
 ```
-1. python -m pytest tests/unit/ -v --tb=short          # ~7s, expect 61 passed
-2. python tests/e2e_visual_test.py                      # ~35-90s, expect ALL CHECKS PASSED
+1. uv run pytest tests/unit/ -v --tb=short              # ~7s, expect 61 passed
+2. uv run python tests/e2e_visual_test.py               # ~35-90s, expect ALL CHECKS PASSED
 3. View /tmp/e2e_screenshots/02_panel_a.png             # Two satellite images visible?
 4. View /tmp/e2e_screenshots/05_full_page.png           # Stats and UI intact?
-5. (optional) python -m pytest tests/integration/ -v -m network  # Network tests
+5. (optional) uv run pytest tests/integration/ -v -m network  # Network tests
 ```
 
 If steps 1–4 all pass, the app is working correctly.
