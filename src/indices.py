@@ -206,3 +206,59 @@ def compute_adaptive_threshold(
             best_thresh = float(bin_centers[i])
 
     return best_thresh
+
+
+# ── Multi-index change classification ────────────────────────────────────
+
+# Category labels returned by classify_change()
+UNCHANGED = 0
+URBAN_CONVERSION = 1
+VEGETATION_LOSS = 2
+FLOODING = 3
+VEGETATION_GAIN = 4
+
+
+def classify_change(
+    ndvi_delta: np.ndarray,
+    ndbi_delta: np.ndarray,
+    mndwi_delta: np.ndarray,
+    threshold: float = 0.10,
+) -> np.ndarray:
+    """Classify each pixel's change type using multi-index decision rules.
+
+    Rules are applied in priority order — earlier rules win when multiple
+    conditions match:
+
+    1. NDVI down AND NDBI up  → Urban Conversion
+    2. MNDWI up AND NDVI down → Flooding / Water Gain
+    3. NDVI down (alone)      → Vegetation Loss / Deforestation
+    4. NDVI up                → Vegetation Gain / Recovery
+    5. Everything else        → Unchanged
+
+    Args:
+        ndvi_delta: 2D float32 array of NDVI change (after - before).
+        ndbi_delta: 2D float32 array of NDBI change (after - before).
+        mndwi_delta: 2D float32 array of MNDWI change (after - before).
+        threshold: Minimum absolute change to count as significant.
+
+    Returns:
+        uint8 array with category codes (0-4).
+    """
+    result = np.full(ndvi_delta.shape, UNCHANGED, dtype=np.uint8)
+
+    ndvi_down = ndvi_delta < -threshold
+    ndvi_up = ndvi_delta > threshold
+    ndbi_up = ndbi_delta > threshold
+    mndwi_up = mndwi_delta > threshold
+
+    # Apply in reverse priority so higher-priority rules overwrite
+    result[ndvi_up] = VEGETATION_GAIN
+    result[ndvi_down] = VEGETATION_LOSS
+    result[ndvi_down & mndwi_up] = FLOODING
+    result[ndvi_down & ndbi_up] = URBAN_CONVERSION
+
+    # NaN pixels → unchanged
+    nan_mask = ~np.isfinite(ndvi_delta) | ~np.isfinite(ndbi_delta) | ~np.isfinite(mndwi_delta)
+    result[nan_mask] = UNCHANGED
+
+    return result
