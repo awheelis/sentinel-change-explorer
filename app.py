@@ -21,13 +21,26 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.export import create_geotiff
 from src.sentinel import load_bands, search_scenes
-from src.indices import compute_change, compute_evi, compute_mndwi, compute_ndbi, compute_ndvi
+from src.indices import (
+    classify_change,
+    compute_change,
+    compute_evi,
+    compute_mndwi,
+    compute_ndbi,
+    compute_ndvi,
+    FLOODING,
+    UNCHANGED,
+    URBAN_CONVERSION,
+    VEGETATION_GAIN,
+    VEGETATION_LOSS,
+)
 from src.masking import apply_mask, build_scl_mask, mask_percentage, union_masks
 from src.normalization import normalize_pif
 from src.overture import get_overture_context
 from src.visualization import (
     build_folium_map,
     change_histogram,
+    classification_to_rgba,
     downscale_array,
     google_maps_url,
     index_to_rgba,
@@ -341,6 +354,12 @@ def main() -> None:
                  "Scene Classification Layer before computing indices.",
         )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
+        show_classification = st.checkbox(
+            "Show change classification",
+            value=True,
+            key="show_classification",
+            help="Multi-index classification overlay: urbanization, vegetation loss, flooding, recovery.",
+        )
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
 
@@ -572,6 +591,22 @@ def main() -> None:
     )
     heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=THRESHOLD, colormap=colormap)
 
+    # ── Multi-index change classification ────────────────────────────────────
+    classification_img = None
+    categories = None
+    if st.session_state.get("show_classification", True):
+        ndvi_b = compute_index_for_bands("ndvi", before_bands)
+        ndvi_a = compute_index_for_bands("ndvi", after_bands)
+        ndbi_b = compute_index_for_bands("ndbi", before_bands)
+        ndbi_a = compute_index_for_bands("ndbi", after_bands)
+        mndwi_b = compute_index_for_bands("mndwi", before_bands)
+        mndwi_a = compute_index_for_bands("mndwi", after_bands)
+        ndvi_delta = compute_change(before=ndvi_b, after=ndvi_a)
+        ndbi_delta = compute_change(before=ndbi_b, after=ndbi_a)
+        mndwi_delta = compute_change(before=mndwi_b, after=mndwi_a)
+        categories = classify_change(ndvi_delta, ndbi_delta, mndwi_delta, threshold=THRESHOLD)
+        classification_img = classification_to_rgba(downscale_array(categories.astype(np.float32), max_dim=800).astype(np.uint8))
+
     # ── Panel A: True Color Comparison ────────────────────────────────────────
     st.subheader("Panel A — True Color Comparison")
     col_before, col_after = st.columns(2)
@@ -597,6 +632,7 @@ def main() -> None:
         before_image=_downscale(before_img),
         after_image=_downscale(after_img),
         heatmap_image=heatmap_img,
+        classification_image=classification_img,
         show_heatmap=True,
         show_overture=False,
         enable_draw=True,
@@ -690,6 +726,23 @@ def main() -> None:
             idx_loss = float(np.sum((idx_delta < -THRESHOLD) & idx_valid) / idx_n * 100) if idx_n > 0 else 0.0
             col.metric(f"{idx_name} gain", f"{idx_gain:.1f}%")
             col.metric(f"{idx_name} loss", f"{idx_loss:.1f}%")
+
+    # Classification breakdown
+    if categories is not None:
+        st.markdown("**Change Classification Breakdown**")
+        cls_cols = st.columns(5)
+        cls_labels = {
+            UNCHANGED: "Unchanged",
+            URBAN_CONVERSION: "Urban Conversion",
+            VEGETATION_LOSS: "Vegetation Loss",
+            FLOODING: "Flooding",
+            VEGETATION_GAIN: "Vegetation Gain",
+        }
+        cls_total = categories.size
+        for col, (code, label) in zip(cls_cols, cls_labels.items()):
+            count = int(np.sum(categories == code))
+            pct = count / cls_total * 100 if cls_total > 0 else 0.0
+            col.metric(label, f"{pct:.1f}%")
 
     tiff_bytes = create_geotiff(
         delta,

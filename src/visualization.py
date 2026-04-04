@@ -333,6 +333,7 @@ def build_folium_map(
     before_image: Optional[Image.Image] = None,
     after_image: Optional[Image.Image] = None,
     heatmap_image: Optional[Image.Image] = None,
+    classification_image: Optional[Image.Image] = None,
     overture_context: Optional[dict[str, gpd.GeoDataFrame]] = None,
     show_heatmap: bool = True,
     show_overture: bool = True,
@@ -345,6 +346,7 @@ def build_folium_map(
         before_image: PIL Image for "before" true-color overlay.
         after_image: PIL Image for "after" true-color overlay.
         heatmap_image: RGBA PIL Image for change heatmap overlay.
+        classification_image: RGBA PIL Image for change classification overlay.
         overture_context: Dict from get_overture_context() with "building",
             "segment", "place" GeoDataFrame values.
         show_heatmap: If True, add heatmap overlay to map.
@@ -403,6 +405,32 @@ def build_folium_map(
         </div>
         """
         m.get_root().html.add_child(folium.Element(legend_html))
+
+    if classification_image is not None:
+        _image_to_bounds_overlay(
+            classification_image, bbox, name="Change Classification", opacity=1.0,
+        ).add_to(m)
+
+        classification_legend_html = """
+        <div style="
+            position: fixed;
+            bottom: 30px; left: 30px;
+            z-index: 1000;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 13px;
+            line-height: 1.6;
+        ">
+            <b>Classification</b><br>
+            <span style="display:inline-block;width:16px;height:12px;background:rgb(255,165,0);border:1px solid #999;"></span> Urban Conversion<br>
+            <span style="display:inline-block;width:16px;height:12px;background:rgb(220,38,38);border:1px solid #999;"></span> Vegetation Loss<br>
+            <span style="display:inline-block;width:16px;height:12px;background:rgb(59,130,246);border:1px solid #999;"></span> Flooding / Water Gain<br>
+            <span style="display:inline-block;width:16px;height:12px;background:rgb(34,197,94);border:1px solid #999;"></span> Vegetation Gain
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(classification_legend_html))
 
     if overture_context is not None and show_overture:
         # Cap feature counts to keep the folium HTML payload under
@@ -483,6 +511,7 @@ def build_folium_map(
         before_image is not None,
         after_image is not None,
         heatmap_image is not None and show_heatmap,
+        classification_image is not None,
         bool(overture_context is not None and show_overture),
     ])
     if overlay_count >= 2:
