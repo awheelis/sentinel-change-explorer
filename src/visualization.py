@@ -332,6 +332,16 @@ def build_folium_map(
     )
     m.fit_bounds([[south, west], [north, east]])
 
+    # Trigger Leaflet resize when embedded in Streamlit iframes to prevent
+    # blank map rendering on initial scroll-into-view.
+    m.get_root().html.add_child(folium.Element(
+        "<script>document.addEventListener('DOMContentLoaded', function() {"
+        "  setTimeout(function() {"
+        "    window.dispatchEvent(new Event('resize'));"
+        "  }, 200);"
+        "});</script>"
+    ))
+
     if before_image is not None:
         _image_to_bounds_overlay(before_image, bbox, name="Before (True Color)", opacity=0.9).add_to(m)
 
@@ -436,5 +446,13 @@ def build_folium_map(
             edit_options={"edit": False},
         ).add_to(m)
 
-    folium.LayerControl(collapsed=False).add_to(m)
+    # Only add LayerControl when there are multiple togglable layers
+    overlay_count = sum([
+        before_image is not None,
+        after_image is not None,
+        heatmap_image is not None and show_heatmap,
+        bool(overture_context is not None and show_overture),
+    ])
+    if overlay_count >= 2:
+        folium.LayerControl(collapsed=False).add_to(m)
     return m

@@ -182,7 +182,7 @@ class TestBuildFoliumMap:
             show_overture=True,
         )
         html = m._repr_html_()
-        assert "Buildings" in html
+        assert "Polygon" in html
 
     def test_draw_plugin_present(self):
         """Map should include Draw plugin when enable_draw=True."""
@@ -199,8 +199,9 @@ class TestBuildFoliumMap:
             show_overture=True,
         )
         html = m._repr_html_()
-        assert "Buildings" in html
-        assert "Roads" in html
+        # Overture vector data should be present (GeoJSON features)
+        assert "Polygon" in html
+        assert "LineString" in html
         # No imagery overlays
         assert "Before" not in html
         assert "After" not in html
@@ -296,6 +297,39 @@ def test_build_folium_map_has_legend():
     m = build_folium_map(bbox=bbox, heatmap_image=heatmap, show_heatmap=True)
     html = m._repr_html_()
     assert "Loss" in html and "Gain" in html
+
+
+def test_no_layer_control_with_single_overlay():
+    """LayerControl should not be added when only one overlay exists."""
+    from src.visualization import build_folium_map
+    from PIL import Image
+    import numpy as np
+
+    # Create a small RGBA image for heatmap
+    img = Image.fromarray(np.zeros((10, 10, 4), dtype=np.uint8), mode="RGBA")
+    bbox = (-115.20, 36.10, -115.15, 36.15)
+
+    # Single overlay (heatmap only) — no LayerControl
+    m = build_folium_map(bbox=bbox, heatmap_image=img, show_heatmap=True)
+    html = m._repr_html_()
+    # LayerControl adds a specific CSS class
+    assert "layer_control" not in html, "LayerControl should not appear with single overlay"
+
+
+def test_layer_control_with_multiple_overlays():
+    """LayerControl should be added when multiple overlays exist."""
+    from src.visualization import build_folium_map
+    from PIL import Image
+    import numpy as np
+
+    img = Image.fromarray(np.zeros((10, 10, 3), dtype=np.uint8))
+    rgba_img = Image.fromarray(np.zeros((10, 10, 4), dtype=np.uint8), mode="RGBA")
+    bbox = (-115.20, 36.10, -115.15, 36.15)
+
+    # Multiple overlays — LayerControl expected
+    m = build_folium_map(bbox=bbox, before_image=img, after_image=img, heatmap_image=rgba_img, show_heatmap=True)
+    html = m._repr_html_()
+    assert "layer_control" in html, "LayerControl should appear with multiple overlays"
 
 
 def test_change_histogram_labels():
