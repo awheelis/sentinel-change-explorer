@@ -29,6 +29,7 @@ from src.visualization import (
     build_folium_map,
     change_histogram,
     downscale_array,
+    google_maps_url,
     index_to_rgba,
     label_image,
     true_color_image,
@@ -699,12 +700,34 @@ def main() -> None:
         before_scene_id=before_scene["id"],
         after_scene_id=after_scene["id"],
     )
-    st.download_button(
-        label="Download Change Raster (.tif)",
-        data=tiff_bytes,
-        file_name=f"change_{index_choice}_{before_scene['datetime'][:10]}_{after_scene['datetime'][:10]}.tif",
-        mime="image/tiff",
+    # ── Action buttons row ───────────────────────────────────────────────
+    maps_url = google_maps_url(bbox)
+
+    # Determine if we have a news link (preset selected with news_url)
+    _active_preset = next(
+        (p for p in load_presets()
+         if p["name"] == st.session_state.get("_last_preset")),
+        None,
     )
+    _news_url = _active_preset["news_url"] if _active_preset and "news_url" in _active_preset else None
+
+    if _news_url:
+        btn_cols = st.columns(3)
+    else:
+        btn_cols = st.columns(2)
+
+    with btn_cols[0]:
+        st.download_button(
+            label="Download Change Raster (.tif)",
+            data=tiff_bytes,
+            file_name=f"change_{index_choice}_{before_scene['datetime'][:10]}_{after_scene['datetime'][:10]}.tif",
+            mime="image/tiff",
+        )
+    with btn_cols[1]:
+        st.link_button("See on Google Maps", maps_url)
+    if _news_url:
+        with btn_cols[2]:
+            st.link_button("Read News Article", _news_url)
 
     # ── Data Quality ─────────────────────────────────────────────────────
     _RATING_ICONS = {"green": "\U0001f7e2", "yellow": "\U0001f7e1", "red": "\U0001f534"}

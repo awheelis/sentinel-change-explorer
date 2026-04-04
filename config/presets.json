@@ -2,6 +2,7 @@
   {
     "name": "Lahaina Wildfire, Maui",
     "description": "The August 2023 wildfire that destroyed the historic town of Lahaina in hours. Before: lush green hillsides and a coastal town. After: scorched moonscape.",
+    "news_url": "https://apnews.com/article/hawaii-wildfires-maui-lahaina-evacuation-fire-d333e5e4e3be4be1b8b362e102e0e38e",
     "bbox": [-156.695, 20.860, -156.660, 20.895],
     "before_range": ["2023-05-01", "2023-07-31"],
     "after_range": ["2023-09-01", "2023-11-30"],
@@ -13,6 +14,7 @@
   {
     "name": "Pakistan Mega-Flood, Sindh",
     "description": "August 2022 — monsoon flooding submerged a third of Pakistan. The Dadu district in Sindh province became an inland sea overnight.",
+    "news_url": "https://www.bbc.com/news/science-environment-62758811",
     "bbox": [67.68, 26.67, 67.82, 26.80],
     "before_range": ["2022-05-01", "2022-06-30"],
     "after_range": ["2022-08-20", "2022-09-30"],
@@ -24,6 +26,7 @@
   {
     "name": "Gigafactory Berlin",
     "description": "Tesla's Berlin factory in Gruenheide, Germany. Dense pine forest clearcut and replaced with one of Europe's largest EV factories.",
+    "news_url": "https://www.reuters.com/business/autos-transportation/teslas-german-gigafactory-wins-high-court-approval-2024-02-22/",
     "bbox": [13.77, 52.385, 13.83, 52.415],
     "before_range": ["2019-05-01", "2019-07-31"],
     "after_range": ["2023-05-01", "2023-07-31"],
@@ -35,6 +38,7 @@
   {
     "name": "Black Summer Bushfires, Australia",
     "description": "The 2019-2020 Australian bushfire season devastated the Blue Mountains west of Sydney. Millions of hectares of eucalyptus forest burned.",
+    "news_url": "https://www.bbc.com/news/world-australia-50951043",
     "bbox": [150.05, -33.55, 150.20, -33.42],
     "before_range": ["2019-08-01", "2019-10-31"],
     "after_range": ["2020-02-01", "2020-04-30"],
@@ -46,6 +50,7 @@
   {
     "name": "Egypt's New Capital",
     "description": "Egypt is building an entirely new capital city east of Cairo in the desert. Empty sand dunes are becoming a megacity with skyscrapers, highways, and government districts.",
+    "news_url": "https://www.bbc.com/news/world-middle-east-65086871",
     "bbox": [31.76, 29.98, 31.88, 30.08],
     "before_range": ["2018-01-01", "2018-03-31"],
     "after_range": ["2023-10-01", "2023-12-31"],

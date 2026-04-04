@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 from PIL import Image
 from src.visualization import true_color_image, downscale_array, index_to_rgba, change_histogram
+from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image, google_maps_url
 import folium
 import geopandas as gpd
 from shapely.geometry import box, Point, LineString
-from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -341,3 +341,39 @@ def test_change_histogram_labels():
     ax = fig.axes[0]
     assert "%" in ax.get_ylabel() or "Proportion" in ax.get_ylabel()
     assert "NDVI" in ax.get_xlabel()
+
+
+class TestGoogleMapsUrl:
+    def test_url_starts_with_google_maps(self):
+        url = google_maps_url((-115.20, 36.10, -115.15, 36.15))
+        assert url.startswith("https://www.google.com/maps/@")
+
+    def test_center_is_correct(self):
+        url = google_maps_url((-115.20, 36.10, -115.15, 36.15))
+        # Center: lat=36.125, lng=-115.175
+        assert "36.125" in url
+        assert "-115.175" in url
+
+    def test_zoom_small_bbox(self):
+        """A small bbox (~0.05 deg) should produce a high zoom (roughly 12-15)."""
+        url = google_maps_url((-115.20, 36.10, -115.15, 36.15))
+        zoom = float(url.split(",")[-1].rstrip("z"))
+        assert 12 <= zoom <= 16
+
+    def test_zoom_large_bbox(self):
+        """A large bbox (~10 deg) should produce a low zoom (roughly 4-7)."""
+        url = google_maps_url((-10.0, -5.0, 0.0, 5.0))
+        zoom = float(url.split(",")[-1].rstrip("z"))
+        assert 4 <= zoom <= 8
+
+    def test_zoom_clamped_minimum(self):
+        """Even for a huge bbox, zoom should not go below 2."""
+        url = google_maps_url((-180.0, -80.0, 180.0, 80.0))
+        zoom = float(url.split(",")[-1].rstrip("z"))
+        assert zoom >= 2
+
+    def test_zoom_clamped_maximum(self):
+        """Even for a tiny bbox, zoom should not exceed 18."""
+        url = google_maps_url((13.0, 52.0, 13.001, 52.001))
+        zoom = float(url.split(",")[-1].rstrip("z"))
+        assert zoom <= 18

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import io
+import math
 from typing import Optional
 
 import folium
@@ -20,6 +21,30 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+
+
+def google_maps_url(bbox: tuple[float, float, float, float]) -> str:
+    """Build a Google Maps URL centered on the given bounding box.
+
+    Parameters
+    ----------
+    bbox : (west, south, east, north) in WGS-84 degrees.
+
+    Returns
+    -------
+    URL like ``https://www.google.com/maps/@{lat},{lng},{zoom}z``.
+    """
+    west, south, east, north = bbox
+    center_lat = (south + north) / 2.0
+    center_lng = (west + east) / 2.0
+    bbox_width = east - west
+    # zoom ≈ log2(360 / width), clamped to [2, 18]
+    if bbox_width > 0:
+        zoom = math.log2(360.0 / bbox_width)
+    else:
+        zoom = 18
+    zoom = int(max(2, min(18, zoom)))
+    return f"https://www.google.com/maps/@{center_lat},{center_lng},{zoom}z"
 
 
 def true_color_image(
