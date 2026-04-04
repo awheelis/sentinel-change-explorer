@@ -216,6 +216,7 @@ def main() -> None:
             st.session_state["after_start"] = _date.fromisoformat(default_after_start)
             st.session_state["after_end"] = _date.fromisoformat(default_after_end)
             st.session_state["index_choice"] = default_index
+            st.session_state.pop("_auto_run_done", None)
 
         with st.expander("Bounding Box (WGS84)", expanded=False):
             col_w, col_e = st.columns(2)
@@ -259,8 +260,15 @@ def main() -> None:
 
     has_data = "before_scene" in st.session_state and "after_scene" in st.session_state
 
+    # Auto-run analysis on first load for the default preset
+    auto_run = False
+    if not has_data and not st.session_state.get("_auto_run_done"):
+        if preset_choice != "Custom…":
+            auto_run = True
+            st.session_state["_auto_run_done"] = True
+
     # Show instructions when no data is available and button not clicked
-    if not has_data and not run_button:
+    if not has_data and not run_button and not auto_run:
         st.info(
             "Select a preset location or enter custom coordinates, choose date ranges, "
             "and click **Analyze Change** to begin."
