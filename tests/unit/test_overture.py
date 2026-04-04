@@ -64,12 +64,11 @@ class TestFetchOvertureLayer:
             crs="EPSG:4326",
         )
 
-        with patch("src.overture._CACHE_DIR", tmp_path):
-            mock_core_module = MagicMock()
-            mock_core_module.geodataframe.return_value = fake_gdf
-            mock_overturemaps = MagicMock()
-            mock_overturemaps.core = mock_core_module
-            with patch.dict("sys.modules", {"overturemaps": mock_overturemaps, "overturemaps.core": mock_core_module}):
+        mock_core = MagicMock()
+        mock_core.geodataframe.return_value = fake_gdf
+
+        with patch("src.overture._CACHE_DIR", tmp_path), \
+             patch("src.overture._import_overture_core", return_value=mock_core):
                 result = fetch_overture_layer("building", bbox=BBOX)
 
         assert isinstance(result, gpd.GeoDataFrame)
@@ -77,12 +76,11 @@ class TestFetchOvertureLayer:
 
     def test_network_failure_returns_empty(self, tmp_path):
         """If the network fetch fails, should return empty GeoDataFrame."""
-        with patch("src.overture._CACHE_DIR", tmp_path):
-            mock_core_module = MagicMock()
-            mock_core_module.geodataframe.side_effect = RuntimeError("S3 timeout")
-            mock_overturemaps = MagicMock()
-            mock_overturemaps.core = mock_core_module
-            with patch.dict("sys.modules", {"overturemaps": mock_overturemaps, "overturemaps.core": mock_core_module}):
+        mock_core = MagicMock()
+        mock_core.geodataframe.side_effect = RuntimeError("S3 timeout")
+
+        with patch("src.overture._CACHE_DIR", tmp_path), \
+             patch("src.overture._import_overture_core", return_value=mock_core):
                 result = fetch_overture_layer("building", bbox=BBOX)
 
         assert isinstance(result, gpd.GeoDataFrame)
@@ -99,3 +97,27 @@ class TestGetOvertureContext:
 
         assert set(result.keys()) == {"building", "segment", "place"}
         assert mock_fetch.call_count == 3
+
+
+def test_fetch_overture_layer_retries_on_transient_failure():
+    """Should retry up to 3 times on transient network errors."""
+    from unittest.mock import call
+    from src.overture import fetch_overture_layer
+
+    mock_gdf = gpd.GeoDataFrame({"geometry": []})
+    mock_core = MagicMock()
+    # Fail twice with transient error, succeed on third
+    mock_core.geodataframe.side_effect = [
+        ConnectionError("timeout"),
+        ConnectionError("timeout"),
+        mock_gdf,
+    ]
+
+    with patch("src.overture._import_overture_core", return_value=mock_core), \
+         patch("time.sleep"):  # don't actually sleep in tests
+        result = fetch_overture_layer(
+            "building",
+            bbox=(-115.2, 36.1, -115.1, 36.2),
+            use_cache=False,
+        )
+    assert mock_core.geodataframe.call_count == 3

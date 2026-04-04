@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 import warnings
 from pathlib import Path
 from typing import Tuple
@@ -26,6 +27,16 @@ _CACHE_DIR = Path(__file__).parent.parent / "cache" / "overture"
 _CONTEXT_LAYERS = ("building", "segment", "place")
 
 BBox = Tuple[float, float, float, float]  # (west, south, east, north)
+
+_TRANSIENT_ERRORS = (TimeoutError, ConnectionError, OSError)
+_MAX_RETRIES = 3
+_RETRY_DELAYS = (2, 4, 8)
+
+
+def _import_overture_core():
+    """Import overturemaps.core, raising ImportError if missing."""
+    from overturemaps import core
+    return core
 
 
 def _cache_path(layer: str, bbox: BBox) -> Path:
@@ -80,20 +91,40 @@ def fetch_overture_layer(
 
     # --- fetch from Overture ---
     try:
-        from overturemaps import core  # local import to keep module importable without net
+        core = _import_overture_core()
+    except ImportError:
+        logger.warning("overturemaps package not installed — skipping layer '%s'", layer)
+        return gpd.GeoDataFrame()
 
-        logger.debug("Fetching Overture layer '%s' for bbox %s", layer, bbox)
-        # Suppress FutureWarning / DeprecationWarning from the overturemaps package.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            gdf: gpd.GeoDataFrame = core.geodataframe(layer, bbox=bbox)
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            logger.debug(
+                "Fetching Overture layer '%s' for bbox %s (attempt %d)",
+                layer, bbox, attempt + 1,
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                gdf: gpd.GeoDataFrame = core.geodataframe(layer, bbox=bbox)
+            last_exc = None
+            break
+        except _TRANSIENT_ERRORS as exc:
+            last_exc = exc
+            if attempt < _MAX_RETRIES - 1:
+                delay = _RETRY_DELAYS[attempt]
+                logger.warning(
+                    "Overture fetch attempt %d failed (%s), retrying in %ds…",
+                    attempt + 1, exc, delay,
+                )
+                time.sleep(delay)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to fetch Overture layer '%s': %s", layer, exc)
+            return gpd.GeoDataFrame()
 
-    except Exception as exc:  # noqa: BLE001
+    if last_exc is not None:
         logger.warning(
-            "Failed to fetch Overture layer '%s' for bbox %s: %s",
-            layer,
-            bbox,
-            exc,
+            "All %d Overture fetch attempts failed for layer '%s': %s",
+            _MAX_RETRIES, layer, last_exc,
         )
         return gpd.GeoDataFrame()
 
