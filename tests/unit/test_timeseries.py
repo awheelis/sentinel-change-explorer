@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.timeseries import compute_anomalies
+from src.timeseries import compute_anomalies, format_summary_caption
 
 
 def _make_series(values, valid_pcts=None):
@@ -107,3 +107,55 @@ class TestComputeAnomalies:
         assert "max_jump_date" in result
         assert len(result["rolling_mean"]) == 5
         assert len(result["is_anomaly"]) == 5
+
+
+class TestFormatSummaryCaption:
+    def test_increasing_trend(self):
+        anomalies = {
+            "trend_direction": "increasing",
+            "trend_slope": 0.032,
+            "volatility": 0.045,
+            "anomaly_count": 2,
+            "is_cloudy": [False, False, True, False, False],
+        }
+        caption = format_summary_caption(anomalies)
+        assert "\u2191" in caption  # ↑
+        assert "increasing" in caption
+        assert "+0.032" in caption
+        assert "0.045" in caption
+        assert "2 anomalies" in caption
+        assert "1 scene excluded" in caption
+
+    def test_decreasing_trend(self):
+        anomalies = {
+            "trend_direction": "decreasing",
+            "trend_slope": -0.018,
+            "volatility": 0.03,
+            "anomaly_count": 0,
+            "is_cloudy": [False, False, False],
+        }
+        caption = format_summary_caption(anomalies)
+        assert "\u2193" in caption  # ↓
+        assert "decreasing" in caption
+
+    def test_stable_trend(self):
+        anomalies = {
+            "trend_direction": "stable",
+            "trend_slope": 0.001,
+            "volatility": 0.01,
+            "anomaly_count": 0,
+            "is_cloudy": [False, False],
+        }
+        caption = format_summary_caption(anomalies)
+        assert "\u2192" in caption  # →
+
+    def test_no_cloudy_scenes(self):
+        anomalies = {
+            "trend_direction": "stable",
+            "trend_slope": 0.001,
+            "volatility": 0.01,
+            "anomaly_count": 0,
+            "is_cloudy": [False, False, False],
+        }
+        caption = format_summary_caption(anomalies)
+        assert "excluded" not in caption

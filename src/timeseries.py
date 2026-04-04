@@ -232,3 +232,39 @@ def compute_anomalies(
         "max_jump": float(max_jump),
         "max_jump_date": max_jump_date,
     }
+
+
+def format_summary_caption(anomalies: dict) -> str:
+    """Format a one-line summary caption for the time-series chart.
+
+    Args:
+        anomalies: Dict from compute_anomalies().
+
+    Returns:
+        Summary string like "Trend: ↑ increasing (+0.032/month) · Volatility: 0.045 · 2 anomalies detected"
+    """
+    arrows = {"increasing": "\u2191", "decreasing": "\u2193", "stable": "\u2192"}
+    direction = anomalies["trend_direction"]
+    arrow = arrows[direction]
+    slope = anomalies["trend_slope"]
+    vol = anomalies["volatility"]
+    anom_count = anomalies["anomaly_count"]
+    cloudy_count = sum(anomalies["is_cloudy"])
+
+    parts = [
+        f"Trend: {arrow} {direction} ({slope:+.3f}/month)",
+        f"Volatility: {vol:.3f}",
+    ]
+
+    if anom_count == 1:
+        parts.append("1 anomaly detected")
+    elif anom_count > 1:
+        parts.append(f"{anom_count} anomalies detected")
+    else:
+        parts.append("0 anomalies")
+
+    if cloudy_count > 0:
+        label = "scene" if cloudy_count == 1 else "scenes"
+        parts.append(f"{cloudy_count} {label} excluded (cloud cover)")
+
+    return " \u00b7 ".join(parts)
