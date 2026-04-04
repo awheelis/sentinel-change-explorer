@@ -41,7 +41,7 @@ PORT = int(os.environ.get("STREAMLIT_PORT", "8599"))
 STREAMLIT_URL = f"http://localhost:{PORT}"
 SCREENSHOT_DIR = Path(os.environ.get("SCREENSHOT_DIR", "/tmp/e2e_screenshots"))
 SAVE_SCREENSHOTS = os.environ.get("SKIP_SCREENSHOTS", "") != "1"
-MAX_ANALYSIS_WAIT = 180  # seconds
+MAX_ANALYSIS_WAIT = 60  # seconds (warm cache: <10s, 60s is safety margin)
 
 
 def log(msg: str) -> None:
@@ -284,6 +284,11 @@ def run_visual_test() -> list[str]:
 
 def test_visual_e2e():
     """Pytest-compatible entry point."""
+    from app import warm_preset_caches
+    log("Warming preset caches for e2e test...")
+    warm_preset_caches()
+    log("Cache warmup complete.")
+
     proc = start_streamlit()
     try:
         errors = run_visual_test()
@@ -304,6 +309,11 @@ def test_visual_e2e():
 
 
 if __name__ == "__main__":
+    from app import warm_preset_caches
+    log("Warming preset caches...")
+    warm_preset_caches()
+    log("Cache warmup complete.")
+
     proc = start_streamlit()
     try:
         errors = run_visual_test()
