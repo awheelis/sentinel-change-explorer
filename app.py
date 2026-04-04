@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.export import create_geotiff
 from src.sentinel import load_bands, search_scenes
-from src.indices import compute_change, compute_mndwi, compute_ndbi, compute_ndvi
+from src.indices import compute_change, compute_evi, compute_mndwi, compute_ndbi, compute_ndvi
 from src.overture import get_overture_context
 from src.visualization import (
     build_folium_map,
@@ -38,6 +38,7 @@ INDEX_FUNCTIONS = {
     "ndvi": ("NDVI", compute_ndvi, ["nir", "red"]),
     "ndbi": ("NDBI", compute_ndbi, ["swir16", "nir"]),
     "mndwi": ("MNDWI", compute_mndwi, ["green", "swir16"]),
+    "evi": ("EVI", compute_evi, ["nir", "red", "blue"]),
 }
 
 # Bands needed for all indices + true color
@@ -120,7 +121,7 @@ def compute_index_for_bands(
         2D float32 index array.
     """
     _, fn, band_order = INDEX_FUNCTIONS[index_key]
-    return fn(bands[band_order[0]], bands[band_order[1]])
+    return fn(*[bands[k] for k in band_order])
 
 
 
@@ -242,7 +243,7 @@ def main() -> None:
         max_cloud = st.slider("Max cloud cover %", 0, 100, 20, step=5)
 
         st.subheader("Display")
-        _INDEX_LABELS = {"ndvi": "NDVI — Vegetation", "ndbi": "NDBI — Built-up", "mndwi": "MNDWI — Water"}
+        _INDEX_LABELS = {"ndvi": "NDVI — Vegetation", "ndbi": "NDBI — Built-up", "mndwi": "MNDWI — Water", "evi": "EVI — Vegetation (dense canopy)"}
         index_choice = st.radio(
             "Change index",
             options=list(INDEX_FUNCTIONS.keys()),

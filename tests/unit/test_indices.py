@@ -1,7 +1,7 @@
 """Unit tests for spectral index computation in src/indices.py."""
 import numpy as np
 import pytest
-from src.indices import compute_ndvi, compute_ndbi, compute_mndwi, compute_change
+from src.indices import compute_ndvi, compute_ndbi, compute_mndwi, compute_change, compute_evi
 
 
 def _make_band(value: float, shape: tuple = (4, 4)) -> np.ndarray:
@@ -121,6 +121,56 @@ class TestChunkedComputation:
         result = _safe_normalized_diff(zeros, zeros, chunk_rows=10)
         assert not np.any(np.isnan(result))
         assert not np.any(np.isinf(result))
+
+
+class TestEVI:
+    def test_known_values(self):
+        """EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)"""
+        nir = _make_band(0.5)
+        red = _make_band(0.1)
+        blue = _make_band(0.05)
+        result = compute_evi(nir, red, blue)
+        expected = 2.5 * (0.5 - 0.1) / (0.5 + 6 * 0.1 - 7.5 * 0.05 + 1)
+        np.testing.assert_allclose(result, expected, atol=0.01)
+
+    def test_zero_denominator(self):
+        nir = _make_band(0.0)
+        red = _make_band(0.0)
+        blue_zero = _make_band(1.0 / 7.5)
+        result = compute_evi(nir, red, blue_zero)
+        assert not np.any(np.isnan(result))
+        assert not np.any(np.isinf(result))
+
+    def test_clipped_to_minus1_plus1(self):
+        nir = _make_band(10000.0)
+        red = _make_band(1.0)
+        blue = _make_band(1.0)
+        result = compute_evi(nir, red, blue)
+        assert result.min() >= -1.0
+        assert result.max() <= 1.0
+
+    def test_uint16_input(self):
+        nir = np.full((4, 4), 5000, dtype=np.uint16)
+        red = np.full((4, 4), 1000, dtype=np.uint16)
+        blue = np.full((4, 4), 500, dtype=np.uint16)
+        result = compute_evi(nir, red, blue)
+        assert result.dtype == np.float32
+
+    def test_output_shape(self):
+        shape = (10, 15)
+        nir = np.random.rand(*shape).astype(np.float32)
+        red = np.random.rand(*shape).astype(np.float32)
+        blue = np.random.rand(*shape).astype(np.float32)
+        result = compute_evi(nir, red, blue)
+        assert result.shape == shape
+
+    def test_shape_mismatch_raises(self):
+        """Should raise ValueError when input shapes differ."""
+        nir = np.ones((4, 4), dtype=np.float32)
+        red = np.ones((4, 4), dtype=np.float32)
+        blue = np.ones((4, 2), dtype=np.float32)
+        with pytest.raises(ValueError, match="shape mismatch"):
+            compute_evi(nir, red, blue)
 
 
 def test_safe_normalized_diff_rejects_shape_mismatch():

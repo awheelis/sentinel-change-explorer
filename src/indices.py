@@ -114,6 +114,36 @@ def compute_mndwi(green: np.ndarray, swir: np.ndarray) -> np.ndarray:
     return _safe_normalized_diff(green, swir)
 
 
+def compute_evi(nir: np.ndarray, red: np.ndarray, blue: np.ndarray) -> np.ndarray:
+    """Compute Enhanced Vegetation Index.
+
+    EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
+
+    Handles atmospheric effects and canopy saturation better than NDVI,
+    especially at high leaf-area index (LAI > 3).
+
+    Args:
+        nir: Near-infrared band array (B08).
+        red: Red band array (B04).
+        blue: Blue band array (B02).
+
+    Returns:
+        float32 EVI array clipped to [-1, 1].
+    """
+    if not (nir.shape == red.shape == blue.shape):
+        raise ValueError(
+            f"Band shape mismatch: nir={nir.shape}, red={red.shape}, blue={blue.shape}. "
+            f"Ensure all bands are resampled to the same resolution."
+        )
+    nir = nir.astype(np.float32)
+    red = red.astype(np.float32)
+    blue = blue.astype(np.float32)
+    denom = nir + 6.0 * red - 7.5 * blue + 1.0
+    with np.errstate(invalid="ignore", divide="ignore"):
+        result = np.where(denom == 0, 0.0, 2.5 * (nir - red) / denom)
+    return np.clip(result.astype(np.float32), -1.0, 1.0)
+
+
 def compute_change(before: np.ndarray, after: np.ndarray) -> np.ndarray:
     """Compute pixel-wise change between two index arrays (after minus before).
 
