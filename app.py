@@ -172,20 +172,20 @@ def main() -> None:
         # Initialize widget state on first load
         if "_last_preset" not in st.session_state:
             st.session_state["_last_preset"] = None
-            # Default coordinates match Amazon Deforestation preset (index=3)
-            st.session_state["west"] = -62.80
-            st.session_state["east"] = -62.65
-            st.session_state["south"] = -9.50
-            st.session_state["north"] = -9.35
+            # Default coordinates match Lahaina Wildfire preset (index=0)
+            st.session_state["west"] = -156.695
+            st.session_state["east"] = -156.660
+            st.session_state["south"] = 20.860
+            st.session_state["north"] = 20.895
             from datetime import date as _date
-            st.session_state["before_start"] = _date.fromisoformat("2019-07-01")
-            st.session_state["before_end"] = _date.fromisoformat("2019-09-30")
-            st.session_state["after_start"] = _date.fromisoformat("2023-07-01")
-            st.session_state["after_end"] = _date.fromisoformat("2023-09-30")
+            st.session_state["before_start"] = _date.fromisoformat("2023-05-01")
+            st.session_state["before_end"] = _date.fromisoformat("2023-07-31")
+            st.session_state["after_start"] = _date.fromisoformat("2023-09-01")
+            st.session_state["after_end"] = _date.fromisoformat("2023-11-30")
             st.session_state["index_choice"] = "ndvi"
-            st.session_state["threshold"] = 0.15  # Amazon default
+            st.session_state["threshold"] = 0.12  # Lahaina default
 
-        preset_choice = st.selectbox("Preset location", preset_names, index=3)
+        preset_choice = st.selectbox("Preset location", preset_names, index=0)
         if preset_choice != "Custom…":
             preset = next(p for p in presets if p["name"] == preset_choice)
             default_bbox = preset["bbox"]

@@ -25,19 +25,19 @@ def _load_presets():
 
 PRESETS = _load_presets()
 
-LAS_VEGAS = next(p for p in PRESETS if "Las Vegas" in p["name"])
+FIRST_PRESET = PRESETS[0]
 
 
 @pytest.mark.network
-def test_no_nodata_border_las_vegas():
+def test_no_nodata_border_first_preset():
     """Reprojected bands must fill the output array with no black corners.
 
     The current calculate_default_transform approach produces a rotated
     parallelogram of valid data within the output array, leaving triangular
     zero-filled corners. A canonical WGS84 grid should fill edge rows/cols.
     """
-    bbox = tuple(LAS_VEGAS["bbox"])
-    after_range = f"{LAS_VEGAS['after_range'][0]}/{LAS_VEGAS['after_range'][1]}"
+    bbox = tuple(FIRST_PRESET["bbox"])
+    after_range = f"{FIRST_PRESET['after_range'][0]}/{FIRST_PRESET['after_range'][1]}"
 
     scenes = search_scenes(bbox=bbox, date_range=after_range, max_cloud_cover=50)
     assert scenes
@@ -69,11 +69,11 @@ def test_no_nodata_border_las_vegas():
 
 
 @pytest.mark.network
-def test_before_after_shapes_match_las_vegas():
+def test_before_after_shapes_match_first_preset():
     """Before and after bands must have identical shapes for change detection."""
-    bbox = tuple(LAS_VEGAS["bbox"])
-    before_range = f"{LAS_VEGAS['before_range'][0]}/{LAS_VEGAS['before_range'][1]}"
-    after_range = f"{LAS_VEGAS['after_range'][0]}/{LAS_VEGAS['after_range'][1]}"
+    bbox = tuple(FIRST_PRESET["bbox"])
+    before_range = f"{FIRST_PRESET['before_range'][0]}/{FIRST_PRESET['before_range'][1]}"
+    after_range = f"{FIRST_PRESET['after_range'][0]}/{FIRST_PRESET['after_range'][1]}"
 
     before_scenes = search_scenes(bbox=bbox, date_range=before_range, max_cloud_cover=50)
     after_scenes = search_scenes(bbox=bbox, date_range=after_range, max_cloud_cover=50)

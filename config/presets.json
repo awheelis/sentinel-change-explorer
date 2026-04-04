@@ -1,57 +1,57 @@
 [
   {
-    "name": "Las Vegas Expansion",
-    "description": "New suburban sprawl in the Summerlin South / Rhodes Ranch area — desert converted to housing tracts.",
-    "bbox": [-115.28, 36.15, -115.18, 36.23],
+    "name": "Lahaina Wildfire, Maui",
+    "description": "The August 2023 wildfire that destroyed the historic town of Lahaina in hours. Before: lush green hillsides and a coastal town. After: scorched moonscape.",
+    "bbox": [-156.695, 20.860, -156.660, 20.895],
+    "before_range": ["2023-05-01", "2023-07-31"],
+    "after_range": ["2023-09-01", "2023-11-30"],
+    "default_index": "ndvi",
+    "notes": "NDVI captures the vegetation loss from the fire. Red = burned areas where green hillsides and trees were incinerated.",
+    "what_to_expect": "The 'before' image shows a green coastal town with tropical vegetation on the hillsides. The 'after' image is devastation — brown and grey where the town and vegetation were. The NDVI heatmap will be deep red across the entire burn scar. Overture building footprints show the dense residential fabric that was destroyed.",
+    "threshold": 0.12
+  },
+  {
+    "name": "Pakistan Mega-Flood, Sindh",
+    "description": "August 2022 — monsoon flooding submerged a third of Pakistan. The Dadu district in Sindh province became an inland sea overnight.",
+    "bbox": [67.68, 26.67, 67.82, 26.80],
+    "before_range": ["2022-05-01", "2022-06-30"],
+    "after_range": ["2022-08-20", "2022-09-30"],
+    "default_index": "mndwi",
+    "notes": "MNDWI shows the water extent change. Blue = new water where farmland once stood. The signal here is enormous.",
+    "what_to_expect": "The 'before' image shows green and brown agricultural fields with villages and roads. The 'after' image is shocking — most of the area is underwater, a vast brown-blue inland lake. The MNDWI heatmap will be almost entirely blue (water gain). Overture roads and buildings show what lies beneath the floodwater.",
+    "threshold": 0.10
+  },
+  {
+    "name": "Gigafactory Berlin",
+    "description": "Tesla's Berlin factory in Gruenheide, Germany. Dense pine forest clearcut and replaced with one of Europe's largest EV factories.",
+    "bbox": [13.77, 52.385, 13.83, 52.415],
     "before_range": ["2019-05-01", "2019-07-31"],
     "after_range": ["2023-05-01", "2023-07-31"],
     "default_index": "ndbi",
-    "notes": "NDBI highlights new impervious surfaces. Red glow = new construction.",
-    "what_to_expect": "In the true-color comparison you should see tan desert in the 'before' image replaced by grey rooftops and street grids in the 'after' image. The NDBI heatmap will light up red over newly paved and built areas. Overture building footprints will cluster where the new subdivisions appeared.",
-    "threshold": 0.08
+    "notes": "NDBI highlights the new impervious surfaces — factory roof, parking lots, access roads carved out of the forest.",
+    "what_to_expect": "The 'before' image shows unbroken dark green pine forest. The 'after' image reveals a massive grey factory complex with parking lots and roads. The NDBI heatmap lights up red over the factory footprint. Switch to NDVI to see the vegetation loss. Overture has excellent coverage of the new buildings and road network.",
+    "threshold": 0.10
   },
   {
-    "name": "Tonga Eruption",
-    "description": "Hunga Tonga–Hunga Ha'apai island before and after the January 2022 eruption. Island shape changed dramatically.",
-    "bbox": [-175.42, -20.57, -175.35, -20.51],
-    "before_range": ["2021-10-01", "2021-12-31"],
-    "after_range": ["2022-03-01", "2022-05-31"],
+    "name": "Black Summer Bushfires, Australia",
+    "description": "The 2019-2020 Australian bushfire season devastated the Blue Mountains west of Sydney. Millions of hectares of eucalyptus forest burned.",
+    "bbox": [150.05, -33.55, 150.20, -33.42],
+    "before_range": ["2019-08-01", "2019-10-31"],
+    "after_range": ["2020-02-01", "2020-04-30"],
     "default_index": "ndvi",
-    "notes": "Post-eruption island is smaller. MNDWI shows water extent change.",
-    "what_to_expect": "The 'before' image shows a small green island connecting two older landmasses. After the eruption most of the island is gone — replaced by open ocean. Switch to MNDWI to see the water-extent change. Overture data will be sparse here since it is a remote uninhabited island.",
-    "threshold": 0.12
-  },
-  {
-    "name": "Amazon Deforestation",
-    "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture.",
-    "bbox": [-62.78, -9.46, -62.68, -9.38],
-    "before_range": ["2019-07-01", "2019-09-30"],
-    "after_range": ["2023-07-01", "2023-09-30"],
-    "default_index": "ndvi",
-    "notes": "Strong NDVI loss signal. Best viewed in dry season (Jul-Sep) for cloud-free imagery.",
-    "what_to_expect": "Expect dense green canopy in the 'before' image with characteristic fishbone-pattern clearings expanding in the 'after' image. The NDVI heatmap will show strong red patches where forest was replaced by bare soil or pasture. Roads from Overture trace the edges of cleared areas.",
+    "notes": "NDVI shows the fire scar — massive vegetation loss across the ridgelines. The contrast between burned and unburned forest is stark.",
+    "what_to_expect": "The 'before' image shows dense dark green eucalyptus canopy covering rugged terrain. The 'after' image reveals enormous brown-black burn scars cutting across the landscape with pockets of surviving green. The NDVI heatmap will be overwhelmingly red. Overture data is sparse in this wilderness area.",
     "threshold": 0.15
   },
   {
-    "name": "Aral Sea Retreat",
-    "description": "Southern Aral Sea shoreline retreat — exposed lakebed where water once stood.",
-    "bbox": [58.68, 45.02, 58.80, 45.12],
-    "before_range": ["2018-07-01", "2018-09-30"],
-    "after_range": ["2023-07-01", "2023-09-30"],
-    "default_index": "mndwi",
-    "notes": "MNDWI best captures water loss. Blue = water gain, red = water loss (expect red).",
-    "what_to_expect": "The 'before' true-color image should show blue-green water along the shoreline, while the 'after' image reveals dry, white salt-crusted lakebed. The MNDWI heatmap will be predominantly red where the water has retreated. Overture data is minimal in this remote region.",
-    "threshold": 0.12
-  },
-  {
-    "name": "Turkey Earthquake",
-    "description": "Central Antakya destruction following the February 6, 2023 earthquake. Collapsed buildings visible in change signal.",
-    "bbox": [36.14, 36.19, 36.24, 36.27],
-    "before_range": ["2022-11-01", "2023-01-31"],
-    "after_range": ["2023-03-01", "2023-04-30"],
+    "name": "Egypt's New Capital",
+    "description": "Egypt is building an entirely new capital city east of Cairo in the desert. Empty sand dunes are becoming a megacity with skyscrapers, highways, and government districts.",
+    "bbox": [31.76, 29.98, 31.88, 30.08],
+    "before_range": ["2018-01-01", "2018-03-31"],
+    "after_range": ["2023-10-01", "2023-12-31"],
     "default_index": "ndbi",
-    "notes": "NDBI decrease indicates building collapse (rubble scatters differently). Keep cloud cover < 30%.",
-    "what_to_expect": "True-color changes are subtle at Sentinel-2 resolution, but you may notice lighter tones where rubble replaced intact buildings. The NDBI heatmap shows mixed signals — decreases where structures collapsed and increases where debris was cleared into open lots. Overture building footprints highlight the dense urban fabric that was affected.",
-    "threshold": 0.10
+    "notes": "NDBI captures the new built-up area. Red = new construction where empty desert stood. The scale of construction is staggering.",
+    "what_to_expect": "The 'before' image is featureless tan desert with faint road tracks. The 'after' image is surreal — an entire city grid with highways, massive buildings, and green landscaped areas materialized from nothing. The NDBI heatmap will be deep red across the new urban footprint. Overture building and road data outlines the new city.",
+    "threshold": 0.08
   }
 ]
