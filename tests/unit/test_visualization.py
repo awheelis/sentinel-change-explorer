@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 from PIL import Image
 from src.visualization import true_color_image, downscale_array, index_to_rgba, change_histogram
+from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image, google_maps_url
 import folium
 import geopandas as gpd
 from shapely.geometry import box, Point, LineString
-from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image
 
 
 def _make_dark_bands(shape=(100, 100)):
@@ -341,9 +341,6 @@ def test_change_histogram_labels():
     ax = fig.axes[0]
     assert "%" in ax.get_ylabel() or "Proportion" in ax.get_ylabel()
     assert "NDVI" in ax.get_xlabel()
-
-
-from src.visualization import google_maps_url
 
 
 class TestGoogleMapsUrl:
