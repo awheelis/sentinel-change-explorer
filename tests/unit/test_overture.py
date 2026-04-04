@@ -114,10 +114,11 @@ def test_fetch_overture_layer_retries_on_transient_failure():
     ]
 
     with patch("src.overture._import_overture_core", return_value=mock_core), \
-         patch("time.sleep"):  # don't actually sleep in tests
+         patch("src.overture.time.sleep"):  # don't actually sleep in tests
         result = fetch_overture_layer(
             "building",
             bbox=(-115.2, 36.1, -115.1, 36.2),
             use_cache=False,
         )
     assert mock_core.geodataframe.call_count == 3
+    assert isinstance(result, gpd.GeoDataFrame)

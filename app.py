@@ -280,7 +280,7 @@ def main() -> None:
 
     has_data = "before_scene" in st.session_state and "after_scene" in st.session_state
 
-    # Auto-run analysis on first load for the default preset
+    # Auto-run analysis when switching to an uncached preset (including first load)
     auto_run = False
     if not has_data and not st.session_state.get("_auto_run_done"):
         if preset_choice != "Custom…":
