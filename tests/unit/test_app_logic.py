@@ -256,3 +256,28 @@ def test_default_colormaps_cover_all_indices():
     from app import INDEX_FUNCTIONS, DEFAULT_COLORMAPS
     for key in INDEX_FUNCTIONS:
         assert key in DEFAULT_COLORMAPS, f"Missing default colormap for index '{key}'"
+
+
+def test_quality_rating_cloud_green():
+    from app import quality_rating
+    assert quality_rating(10.0, thresholds=(15, 30)) == "green"
+
+def test_quality_rating_cloud_yellow():
+    from app import quality_rating
+    assert quality_rating(20.0, thresholds=(15, 30)) == "yellow"
+
+def test_quality_rating_cloud_red():
+    from app import quality_rating
+    assert quality_rating(35.0, thresholds=(15, 30)) == "red"
+
+def test_quality_rating_sun_green():
+    from app import quality_rating
+    assert quality_rating(45.0, thresholds=(30, 20), lower_is_worse=True) == "green"
+
+def test_quality_rating_sun_yellow():
+    from app import quality_rating
+    assert quality_rating(25.0, thresholds=(30, 20), lower_is_worse=True) == "yellow"
+
+def test_quality_rating_sun_red():
+    from app import quality_rating
+    assert quality_rating(15.0, thresholds=(30, 20), lower_is_worse=True) == "red"

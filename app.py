@@ -133,6 +133,37 @@ def compute_index_for_bands(
     return fn(*[bands[k] for k in band_order])
 
 
+def quality_rating(
+    value: float,
+    thresholds: tuple[float, float] = (15, 30),
+    lower_is_worse: bool = False,
+) -> str:
+    """Classify a quality metric as green/yellow/red.
+
+    Args:
+        value: The metric value to classify.
+        thresholds: (yellow_boundary, red_boundary). For normal mode,
+            value > yellow = yellow, value > red = red. For lower_is_worse,
+            value < yellow = yellow, value < red = red.
+        lower_is_worse: If True, lower values are worse (e.g. sun elevation).
+
+    Returns:
+        "green", "yellow", or "red".
+    """
+    yellow_bound, red_bound = thresholds
+    if lower_is_worse:
+        if value < red_bound:
+            return "red"
+        if value < yellow_bound:
+            return "yellow"
+        return "green"
+    else:
+        if value > red_bound:
+            return "red"
+        if value > yellow_bound:
+            return "yellow"
+        return "green"
+
 
 def main() -> None:
     """Entry point for the Streamlit app."""
@@ -600,6 +631,47 @@ def main() -> None:
     detail_cols[1].write(f"**After:** {after_scene['id']}  \n"
                          f"Date: {after_scene['datetime'][:10]}  \n"
                          f"Cloud: {after_scene['cloud_cover']:.1f}%")
+
+    # ── Data Quality ─────────────────────────────────────────────────────
+    _RATING_ICONS = {"green": "\U0001f7e2", "yellow": "\U0001f7e1", "red": "\U0001f534"}
+
+    with st.expander("Data Quality", expanded=False):
+        qual_cols = st.columns(2)
+
+        # Cloud cover
+        bc = before_scene["cloud_cover"]
+        ac = after_scene["cloud_cover"]
+        bc_rating = quality_rating(bc, thresholds=(15, 30))
+        ac_rating = quality_rating(ac, thresholds=(15, 30))
+        qual_cols[0].markdown(f"{_RATING_ICONS[bc_rating]} **Before cloud:** {bc:.1f}%")
+        qual_cols[1].markdown(f"{_RATING_ICONS[ac_rating]} **After cloud:** {ac:.1f}%")
+
+        # Sun elevation
+        b_sun = before_scene.get("sun_elevation")
+        a_sun = after_scene.get("sun_elevation")
+        if b_sun is not None:
+            bs_rating = quality_rating(b_sun, thresholds=(30, 20), lower_is_worse=True)
+            qual_cols[0].markdown(f"{_RATING_ICONS[bs_rating]} **Before sun elev:** {b_sun:.1f}\u00b0")
+        else:
+            qual_cols[0].markdown("\u2796 **Before sun elev:** N/A")
+        if a_sun is not None:
+            as_rating = quality_rating(a_sun, thresholds=(30, 20), lower_is_worse=True)
+            qual_cols[1].markdown(f"{_RATING_ICONS[as_rating]} **After sun elev:** {a_sun:.1f}\u00b0")
+        else:
+            qual_cols[1].markdown("\u2796 **After sun elev:** N/A")
+
+        # Time gap
+        from datetime import datetime
+        before_dt = datetime.fromisoformat(before_scene["datetime"].replace("Z", "+00:00"))
+        after_dt = datetime.fromisoformat(after_scene["datetime"].replace("Z", "+00:00"))
+        gap_days = abs((after_dt - before_dt).days)
+        gap_years = gap_days / 365.25
+        if gap_years >= 1:
+            gap_str = f"{gap_years:.1f} years"
+        else:
+            gap_str = f"{gap_days} days"
+        gap_rating = quality_rating(gap_days, thresholds=(365, 730))
+        st.markdown(f"{_RATING_ICONS[gap_rating]} **Time gap:** {gap_str}")
 
     st.pyplot(change_histogram(delta, threshold=THRESHOLD, index_name=INDEX_FUNCTIONS[index_choice][0]))
 

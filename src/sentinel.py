@@ -78,6 +78,7 @@ def search_scenes(
             "datetime": str(item.datetime),
             "assets": {k: v.href for k, v in item.assets.items()},
             "bbox": list(item.bbox),
+            "sun_elevation": item.properties.get("view:sun_elevation"),
         })
     return results
 
