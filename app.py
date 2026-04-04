@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -161,23 +160,7 @@ def main() -> None:
         "urbanization, and water change using Sentinel-2 L2A imagery."
     )
 
-    # ── Pre-warm all preset caches on first server load ──────────────────────
-    skip_warmup = os.environ.get("SKIP_WARMUP", "").lower() in ("1", "true", "yes")
-    if skip_warmup and "_warmup_done" not in st.session_state:
-        st.session_state["_warmup_done"] = True
-    if "_warmup_done" not in st.session_state:
-        warmup_bar = st.progress(0, text="Preparing satellite data for all presets…")
-        try:
-            warm_preset_caches(
-                on_progress=lambda done, total: warmup_bar.progress(
-                    done / total,
-                    text=f"Pre-fetching preset data… ({done}/{total} tasks)",
-                ),
-            )
-        except Exception:
-            logger.warning("Warm-up failed; continuing without cache priming", exc_info=True)
-        warmup_bar.empty()
-        st.session_state["_warmup_done"] = True
+    # Warm-up removed — data is fetched lazily when user clicks Analyze Change.
 
     presets = load_presets()
     preset_names = ["Custom…"] + [p["name"] for p in presets]
