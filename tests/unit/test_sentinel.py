@@ -117,3 +117,16 @@ class TestLoadBands:
                 band_keys=["nonexistent_band"],
                 target_res=10,
             )
+
+
+def test_rasterio_env_respects_environment_override(monkeypatch):
+    """S3 config should be overridable via environment variables."""
+    monkeypatch.setenv("AWS_NO_SIGN_REQUEST", "NO")
+    import importlib
+    import src.sentinel as mod
+    importlib.reload(mod)
+    assert mod._RASTERIO_ENV["AWS_NO_SIGN_REQUEST"] == "NO"
+    # Restore default
+    monkeypatch.delenv("AWS_NO_SIGN_REQUEST")
+    importlib.reload(mod)
+    assert mod._RASTERIO_ENV["AWS_NO_SIGN_REQUEST"] == "YES"

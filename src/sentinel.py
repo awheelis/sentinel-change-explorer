@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -29,12 +30,12 @@ SENTINEL_COLLECTION = "sentinel-2-l2a"
 
 # Rasterio environment for unsigned S3 access to public COGs
 _RASTERIO_ENV = {
-    "AWS_NO_SIGN_REQUEST": "YES",
-    "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "YES",
-    "GDAL_HTTP_MULTIPLEX": "YES",
-    "GDAL_HTTP_VERSION": "2",
-    "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tif,.tiff",
-    "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+    "AWS_NO_SIGN_REQUEST": os.environ.get("AWS_NO_SIGN_REQUEST", "YES"),
+    "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": os.environ.get("GDAL_HTTP_MERGE_CONSECUTIVE_RANGES", "YES"),
+    "GDAL_HTTP_MULTIPLEX": os.environ.get("GDAL_HTTP_MULTIPLEX", "YES"),
+    "GDAL_HTTP_VERSION": os.environ.get("GDAL_HTTP_VERSION", "2"),
+    "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": os.environ.get("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif,.tiff"),
+    "GDAL_DISABLE_READDIR_ON_OPEN": os.environ.get("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR"),
 }
 
 
