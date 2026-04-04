@@ -25,9 +25,14 @@ def _make_series(values, valid_pcts=None):
 
 class TestComputeAnomalies:
     def test_detects_anomaly_in_synthetic_series(self):
-        """A single large drop in an otherwise stable series should be flagged."""
-        values = [0.6, 0.62, 0.59, 0.61, 0.15, 0.58, 0.60, 0.61]
-        result = compute_anomalies(_make_series(values))
+        """A single extreme drop in an otherwise stable series should be flagged.
+
+        Uses rolling_window=7 so that most of the window contains normal values,
+        keeping rolling_std low enough that the 0.05 outlier exceeds the 2-sigma
+        threshold. This validates the rolling mean/std approach.
+        """
+        values = [0.6, 0.62, 0.59, 0.61, 0.05, 0.58, 0.60, 0.61]
+        result = compute_anomalies(_make_series(values), rolling_window=7)
         assert result["anomaly_count"] >= 1
         assert result["is_anomaly"][4] is True
 
@@ -78,10 +83,14 @@ class TestComputeAnomalies:
         assert result is None
 
     def test_max_jump(self):
-        values = [0.5, 0.52, 0.80, 0.51, 0.50]
+        """max_jump uses absolute value, so a large drop is captured as well as a spike."""
+        # The biggest change here is scene 3 → 4: a DROP of 0.30 (0.80 → 0.50).
+        # Without abs(), the signed jump would be -0.30 and the upward spike of 0.28
+        # (0.52 → 0.80) would win instead. abs() ensures the drop wins.
+        values = [0.5, 0.52, 0.80, 0.50, 0.51]
         result = compute_anomalies(_make_series(values))
-        assert abs(result["max_jump"] - 0.28) < 0.01
-        assert result["max_jump_date"] == "2023-03-15T00:00:00Z"
+        assert abs(result["max_jump"] - 0.30) < 0.01
+        assert result["max_jump_date"] == "2023-04-15T00:00:00Z"
 
     def test_output_structure(self):
         values = [0.5, 0.51, 0.49, 0.50, 0.52]

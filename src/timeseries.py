@@ -68,14 +68,12 @@ def compute_anomalies(
 
     volatility = float(np.std(y_arr))
 
-    # Max upward jump (scene-to-scene) among usable scenes.
-    # We track the largest positive (ascending) step and report the destination scene's date.
-    # This captures sudden index spikes (e.g. vegetation flush, flooding) better than raw
-    # absolute change, which would otherwise be dominated by the equal-or-larger drop after.
+    # Max absolute jump (scene-to-scene) among usable scenes.
+    # Uses absolute value so large drops are captured as well as large spikes.
     max_jump = 0.0
     max_jump_date = series[usable_indices[0]]["datetime"]
     for j in range(1, len(usable_values)):
-        jump = usable_values[j] - usable_values[j - 1]  # signed: positive = upward spike
+        jump = abs(usable_values[j] - usable_values[j - 1])
         if jump > max_jump:
             max_jump = jump
             max_jump_date = series[usable_indices[j]]["datetime"]
@@ -106,16 +104,14 @@ def compute_anomalies(
             rolling_std[i] = 0.0
 
     # Anomaly detection (only if >= 4 usable scenes).
-    # Use global mean/std of usable values so the anomalous scene itself cannot dilute
-    # the reference statistics (a narrow rolling window would include the outlier and
-    # inflate the std enough to mask it).
+    # Uses rolling mean/std already computed above: is_anomaly[i] = |value - rolling_mean[i]| > sigma * rolling_std[i]
     if len(usable_indices) >= 4:
-        global_mean = float(np.mean(y_arr))
-        global_std = float(np.std(y_arr))
-        if global_std > 0:
-            for i in usable_indices:
-                deviation = abs(series[i]["mean_index"] - global_mean)
-                if deviation > sigma_threshold * global_std:
+        for i in usable_indices:
+            r_mean = rolling_mean[i]
+            r_std = rolling_std[i]
+            if r_mean is not None and r_std is not None and r_std > 0:
+                deviation = abs(series[i]["mean_index"] - r_mean)
+                if deviation > sigma_threshold * r_std:
                     is_anomaly[i] = True
 
     anomaly_count = sum(is_anomaly)
