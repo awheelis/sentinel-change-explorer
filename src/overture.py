@@ -114,7 +114,6 @@ def fetch_overture_layer(
         gdf = gpd.GeoDataFrame()
     except (ValueError, TypeError, ArithmeticError) as exc:
         logger.warning("Failed to fetch Overture layer '%s': %s", layer, exc)
-        pool.shutdown(wait=False, cancel_futures=True)
         return gpd.GeoDataFrame()
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
