@@ -35,9 +35,9 @@ from src.visualization import (
 PRESETS_FILE = Path(__file__).parent / "config" / "presets.json"
 
 INDEX_FUNCTIONS = {
-    "ndvi": ("NDVI — Vegetation", compute_ndvi, ["nir", "red"]),
-    "ndbi": ("NDBI — Built-up", compute_ndbi, ["swir16", "nir"]),
-    "mndwi": ("MNDWI — Water", compute_mndwi, ["green", "swir16"]),
+    "ndvi": ("NDVI", compute_ndvi, ["nir", "red"]),
+    "ndbi": ("NDBI", compute_ndbi, ["swir16", "nir"]),
+    "mndwi": ("MNDWI", compute_mndwi, ["green", "swir16"]),
 }
 
 # Bands needed for all indices + true color
@@ -242,10 +242,11 @@ def main() -> None:
         max_cloud = st.slider("Max cloud cover %", 0, 100, 20, step=5)
 
         st.subheader("Display")
+        _INDEX_LABELS = {"ndvi": "NDVI — Vegetation", "ndbi": "NDBI — Built-up", "mndwi": "MNDWI — Water"}
         index_choice = st.radio(
             "Change index",
             options=list(INDEX_FUNCTIONS.keys()),
-            format_func=lambda k: INDEX_FUNCTIONS[k][0],
+            format_func=lambda k: _INDEX_LABELS[k],
             key="index_choice",
         )
         show_overture = st.checkbox("Show Overture Maps layers", value=True)
@@ -489,6 +490,22 @@ def main() -> None:
     stat_cols[1].metric(f"{INDEX_FUNCTIONS[index_choice][0]} gain", f"{pct_gain:.1f}%")
     stat_cols[2].metric(f"{INDEX_FUNCTIONS[index_choice][0]} loss", f"{pct_loss:.1f}%")
     stat_cols[3].metric("Unchanged", f"{pct_unchanged:.1f}%")
+
+    # All indices summary (spec requirement: show all three simultaneously)
+    st.markdown("**All Indices Summary**")
+    idx_cols = st.columns(len(INDEX_FUNCTIONS))
+    for col, (idx_key, (idx_name, _, _)) in zip(idx_cols, INDEX_FUNCTIONS.items()):
+        if idx_key == index_choice:
+            col.metric(f"{idx_name} gain", f"{pct_gain:.1f}%")
+            col.metric(f"{idx_name} loss", f"{pct_loss:.1f}%")
+        else:
+            idx_before = compute_index_for_bands(idx_key, before_bands)
+            idx_after = compute_index_for_bands(idx_key, after_bands)
+            idx_delta = compute_change(before=idx_before, after=idx_after)
+            idx_gain = float(np.mean(idx_delta > THRESHOLD) * 100)
+            idx_loss = float(np.mean(idx_delta < -THRESHOLD) * 100)
+            col.metric(f"{idx_name} gain", f"{idx_gain:.1f}%")
+            col.metric(f"{idx_name} loss", f"{idx_loss:.1f}%")
 
     tiff_bytes = create_geotiff(
         delta,

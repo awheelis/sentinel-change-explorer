@@ -228,3 +228,10 @@ class TestMemoryGuard:
         assert high_lat < equator, (
             f"High-lat ({high_lat:.0f} MB) should be smaller than equator ({equator:.0f} MB)"
         )
+
+
+def test_index_display_names_are_short():
+    """Metric labels should be short enough for st.metric columns."""
+    from app import INDEX_FUNCTIONS
+    for key, (name, _, _) in INDEX_FUNCTIONS.items():
+        assert len(name) <= 6, f"INDEX_FUNCTIONS['{key}'] name '{name}' too long for metric label"
