@@ -336,7 +336,6 @@ def main() -> None:
 
     if needs_before or needs_after or needs_overture:
         with st.status("Analyzing change detection…", expanded=True) as status:
-            st.write("Fetching scenes and bands concurrently…")
 
             def _fetch_date(date_range):
                 """Search + load bands for one date range. Returns (scene, bands) or raises."""
@@ -353,30 +352,37 @@ def main() -> None:
                 future_overture = executor.submit(get_overture_context, bbox=bbox) if needs_overture else None
 
                 if future_before is not None:
+                    st.write("Searching for before-period scenes…")
                     try:
                         scene, bands = future_before.result()
                         st.session_state["before_scene"] = scene
                         st.session_state["before_bands"] = bands
+                        st.write(f"Before scene loaded: {scene['id']}")
                     except Exception as exc:
                         st.error(f"Failed to fetch before data: {exc}")
                         status.update(label="Analysis failed", state="error")
                         return
 
                 if future_after is not None:
+                    st.write("Searching for after-period scenes…")
                     try:
                         scene, bands = future_after.result()
                         st.session_state["after_scene"] = scene
                         st.session_state["after_bands"] = bands
+                        st.write(f"After scene loaded: {scene['id']}")
                     except Exception as exc:
                         st.error(f"Failed to fetch after data: {exc}")
                         status.update(label="Analysis failed", state="error")
                         return
 
                 if future_overture is not None:
+                    st.write("Fetching Overture Maps context…")
                     try:
                         st.session_state["overture"] = future_overture.result()
+                        st.write("Overture context loaded")
                     except Exception as exc:
                         logger.warning("Overture context fetch failed: %s", exc)
+                        st.write("Overture context unavailable")
 
             status.update(label="Analysis complete!", state="complete", expanded=False)
 
