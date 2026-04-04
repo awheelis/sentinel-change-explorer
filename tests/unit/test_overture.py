@@ -77,7 +77,7 @@ class TestFetchOvertureLayer:
     def test_network_failure_returns_empty(self, tmp_path):
         """If the network fetch fails, should return empty GeoDataFrame."""
         mock_core = MagicMock()
-        mock_core.geodataframe.side_effect = RuntimeError("S3 timeout")
+        mock_core.geodataframe.side_effect = ValueError("S3 timeout")
 
         with patch("src.overture._CACHE_DIR", tmp_path), \
              patch("src.overture._import_overture_core", return_value=mock_core):
@@ -159,3 +159,13 @@ def test_fetch_overture_layer_retries_on_transient_failure():
         )
     assert mock_core.geodataframe.call_count == 3
     assert isinstance(result, gpd.GeoDataFrame)
+
+
+def test_keyboard_interrupt_propagates():
+    """KeyboardInterrupt should not be swallowed by exception handlers."""
+    mock_core = MagicMock()
+    mock_core.geodataframe.side_effect = KeyboardInterrupt
+
+    with patch("src.overture._import_overture_core", return_value=mock_core):
+        with pytest.raises(KeyboardInterrupt):
+            fetch_overture_layer("building", bbox=(-115.2, 36.1, -115.1, 36.2), use_cache=False)

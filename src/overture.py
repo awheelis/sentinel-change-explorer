@@ -89,7 +89,7 @@ def fetch_overture_layer(
         logger.debug("Cache hit: %s", cache_file)
         try:
             return gpd.read_parquet(cache_file)
-        except Exception as exc:  # noqa: BLE001
+        except (OSError, ValueError) as exc:
             logger.warning("Failed to read cache file %s: %s — refetching.", cache_file, exc)
 
     # --- fetch from Overture ---
@@ -122,7 +122,7 @@ def fetch_overture_layer(
                     attempt + 1, exc, delay,
                 )
                 time.sleep(delay)
-        except Exception as exc:  # noqa: BLE001
+        except (ValueError, TypeError, ArithmeticError) as exc:
             logger.warning("Failed to fetch Overture layer '%s': %s", layer, exc)
             return gpd.GeoDataFrame()
 
@@ -139,7 +139,7 @@ def fetch_overture_layer(
             _CACHE_DIR.mkdir(parents=True, exist_ok=True)
             gdf.to_parquet(cache_file)
             logger.debug("Cached %d features to %s", len(gdf), cache_file)
-        except Exception as exc:  # noqa: BLE001
+        except OSError as exc:
             logger.warning("Failed to write cache file %s: %s", cache_file, exc)
 
     return gdf
