@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 from src.visualization import true_color_image, downscale_array, index_to_rgba, change_histogram
 from src.visualization import build_folium_map, _image_to_bounds_overlay, label_image, google_maps_url
+from src.visualization import time_series_chart
 import folium
 import geopandas as gpd
 from shapely.geometry import box, Point, LineString
@@ -377,3 +378,75 @@ class TestGoogleMapsUrl:
         url = google_maps_url((13.0, 52.0, 13.001, 52.001))
         zoom = float(url.split(",")[-1].rstrip("z"))
         assert zoom <= 18
+
+
+def _make_ts_series(n=8):
+    """Create a synthetic time-series for chart testing."""
+    values = [0.5, 0.52, 0.48, 0.51, 0.15, 0.49, 0.53, 0.50][:n]
+    series = []
+    for i, v in enumerate(values):
+        series.append({
+            "datetime": f"2023-{(i + 1):02d}-15T00:00:00Z",
+            "scene_id": f"scene_{i}",
+            "mean_index": v,
+            "cloud_cover": 5.0,
+            "valid_pixel_pct": 100.0 if i != 3 else 20.0,
+        })
+    return series
+
+
+def _make_ts_anomalies(n=8):
+    """Create matching anomaly results for chart testing."""
+    return {
+        "rolling_mean": [0.5, 0.51, 0.50, None, 0.50, 0.49, 0.51, 0.50][:n],
+        "rolling_std": [0.01, 0.02, 0.02, None, 0.02, 0.02, 0.02, 0.01][:n],
+        "is_anomaly": [False, False, False, False, True, False, False, False][:n],
+        "is_cloudy": [False, False, False, True, False, False, False, False][:n],
+        "trend_slope": -0.01,
+        "trend_direction": "stable",
+        "volatility": 0.045,
+        "anomaly_count": 1,
+        "max_jump": 0.36,
+        "max_jump_date": "2023-05-15T00:00:00Z",
+    }
+
+
+class TestTimeSeriesChart:
+    def test_returns_figure(self):
+        fig = time_series_chart(
+            _make_ts_series(), _make_ts_anomalies(),
+            index_name="ndvi",
+            before_date="2023-01-01",
+            after_date="2023-08-30",
+        )
+        assert isinstance(fig, matplotlib.figure.Figure)
+
+    def test_has_axes_with_data(self):
+        fig = time_series_chart(
+            _make_ts_series(), _make_ts_anomalies(),
+            index_name="ndvi",
+            before_date="2023-01-01",
+            after_date="2023-08-30",
+        )
+        ax = fig.axes[0]
+        assert len(ax.get_lines()) >= 1
+
+    def test_title_contains_index_name(self):
+        fig = time_series_chart(
+            _make_ts_series(), _make_ts_anomalies(),
+            index_name="mndwi",
+            before_date="2023-01-01",
+            after_date="2023-08-30",
+        )
+        ax = fig.axes[0]
+        assert "MNDWI" in ax.get_title()
+
+    def test_works_with_all_index_names(self):
+        for idx in ("ndvi", "ndbi", "mndwi", "evi"):
+            fig = time_series_chart(
+                _make_ts_series(5), _make_ts_anomalies(5),
+                index_name=idx,
+                before_date="2023-01-01",
+                after_date="2023-05-30",
+            )
+            assert isinstance(fig, matplotlib.figure.Figure)

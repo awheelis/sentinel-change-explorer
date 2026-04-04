@@ -566,3 +566,126 @@ def classification_to_rgba(
     rgba[changed, 3] = int(alpha * 255)
 
     return Image.fromarray(rgba, mode="RGBA")
+
+
+# ── Time-series temporal trend chart ──────────────────────────────────
+
+_INDEX_COLORS: dict[str, str] = {
+    "ndvi": "#4CAF50",
+    "ndbi": "#FF9800",
+    "mndwi": "#2196F3",
+    "evi": "#2E7D32",
+}
+
+
+def time_series_chart(
+    series: list[dict],
+    anomalies: dict,
+    index_name: str,
+    before_date: str,
+    after_date: str,
+) -> matplotlib.figure.Figure:
+    """Create a time-series trend chart with rolling stats and anomaly markers.
+
+    Args:
+        series: List of scene dicts with datetime, mean_index, valid_pixel_pct.
+        anomalies: Dict from compute_anomalies() with rolling_mean, rolling_std,
+            is_anomaly, is_cloudy.
+        index_name: Index key ("ndvi", "ndbi", "mndwi", "evi").
+        before_date: Before reference date string (YYYY-MM-DD) for vertical marker.
+        after_date: After reference date string (YYYY-MM-DD) for vertical marker.
+
+    Returns:
+        matplotlib Figure with the trend chart.
+    """
+    from datetime import datetime as dt
+
+    color = _INDEX_COLORS.get(index_name, "#4CAF50")
+    display_name = index_name.upper()
+
+    dates = []
+    for s in series:
+        dates.append(dt.fromisoformat(s["datetime"].replace("Z", "+00:00")))
+    values = [s["mean_index"] for s in series]
+
+    is_cloudy = anomalies["is_cloudy"]
+    is_anomaly = anomalies["is_anomaly"]
+    rolling_mean = anomalies["rolling_mean"]
+    rolling_std = anomalies["rolling_std"]
+
+    # Separate usable vs cloudy points
+    usable_dates = [d for d, c in zip(dates, is_cloudy) if not c]
+    usable_vals = [v for v, c in zip(values, is_cloudy) if not c]
+    cloudy_dates = [d for d, c in zip(dates, is_cloudy) if c]
+    cloudy_vals = [v for v, c in zip(values, is_cloudy) if c]
+
+    # Anomaly points
+    anom_dates = [d for d, a, c in zip(dates, is_anomaly, is_cloudy) if a and not c]
+    anom_vals = [v for v, a, c in zip(values, is_anomaly, is_cloudy) if a and not c]
+
+    # Rolling mean/std for usable scenes
+    rm_dates = [d for d, rm, c in zip(dates, rolling_mean, is_cloudy) if rm is not None and not c]
+    rm_vals = [rm for rm, c in zip(rolling_mean, is_cloudy) if rm is not None and not c]
+    rs_vals = [rs for rs, c in zip(rolling_std, is_cloudy) if rs is not None and not c]
+
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    # ±2σ confidence band
+    if rm_vals and rs_vals:
+        upper = [m + 2 * s for m, s in zip(rm_vals, rs_vals)]
+        lower = [m - 2 * s for m, s in zip(rm_vals, rs_vals)]
+        ax.fill_between(rm_dates, lower, upper, alpha=0.2, color=color, label="\u00b12\u03c3 band")
+
+    # Rolling mean line
+    if rm_vals:
+        ax.plot(rm_dates, rm_vals, color=color, alpha=0.5, linestyle="--", linewidth=1.5, label="Rolling mean")
+
+    # Main data line (usable scenes)
+    if usable_dates:
+        ax.plot(usable_dates, usable_vals, color=color, linewidth=2.5, marker="o", markersize=5, label=f"Mean {display_name}", zorder=3)
+
+    # Cloudy scenes (gray hollow dots, not connected)
+    if cloudy_dates:
+        ax.scatter(cloudy_dates, cloudy_vals, facecolors="none", edgecolors="#888888", linewidths=2, s=60, zorder=4, label="Cloudy scene")
+
+    # Anomaly markers (red, larger)
+    if anom_dates:
+        ax.scatter(anom_dates, anom_vals, color="#E53935", s=120, zorder=5, label="Anomaly")
+        # Annotate with sigma deviation
+        for ad, av in zip(anom_dates, anom_vals):
+            idx = dates.index(ad)
+            rm = rolling_mean[idx]
+            rs = rolling_std[idx]
+            if rm is not None and rs is not None and rs > 0:
+                sigma_dev = (av - rm) / rs
+                ax.annotate(
+                    f"{sigma_dev:+.1f}\u03c3",
+                    (ad, av),
+                    textcoords="offset points",
+                    xytext=(10, -10),
+                    fontsize=9,
+                    color="#E53935",
+                )
+
+    # Before/after reference lines
+    before_dt = dt.fromisoformat(before_date) if "T" not in before_date else dt.fromisoformat(before_date)
+    after_dt = dt.fromisoformat(after_date) if "T" not in after_date else dt.fromisoformat(after_date)
+    ax.axvline(before_dt, color="#888888", linestyle="--", linewidth=1.5)
+    ax.axvline(after_dt, color="#888888", linestyle="--", linewidth=1.5)
+    y_top = ax.get_ylim()[1]
+    ax.text(before_dt, y_top, f" Before", fontsize=9, color="#aaaaaa", va="top")
+    ax.text(after_dt, y_top, f" After", fontsize=9, color="#aaaaaa", va="top")
+
+    # Labels and title
+    n_scenes = len(series)
+    date_strs = [d.strftime("%b %Y") for d in dates]
+    start_label = date_strs[0] if date_strs else ""
+    end_label = date_strs[-1] if date_strs else ""
+    ax.set_title(f"{display_name} Temporal Trend \u2014 {start_label} to {end_label} ({n_scenes} scenes)")
+    ax.set_ylabel(f"Mean {display_name}")
+    ax.set_xlabel("Date")
+    ax.legend(loc="upper right", fontsize=8)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+
+    return fig
