@@ -1,6 +1,6 @@
 [
   {
-    "name": "Las Vegas Urban Expansion",
+    "name": "Las Vegas Expansion",
     "description": "New suburban sprawl in the Summerlin South / Rhodes Ranch area — desert converted to housing tracts.",
     "bbox": [-115.28, 36.15, -115.18, 36.23],
     "before_range": ["2019-05-01", "2019-07-31"],
@@ -11,7 +11,7 @@
     "threshold": 0.08
   },
   {
-    "name": "Tonga Volcanic Eruption",
+    "name": "Tonga Eruption",
     "description": "Hunga Tonga–Hunga Ha'apai island before and after the January 2022 eruption. Island shape changed dramatically.",
     "bbox": [-175.42, -20.57, -175.35, -20.51],
     "before_range": ["2021-10-01", "2021-12-31"],
@@ -22,7 +22,7 @@
     "threshold": 0.12
   },
   {
-    "name": "Amazon Deforestation (Rondônia)",
+    "name": "Amazon Deforestation",
     "description": "Active deforestation frontier in Rondônia, Brazil. Forest cleared for agriculture.",
     "bbox": [-62.78, -9.46, -62.68, -9.38],
     "before_range": ["2019-07-01", "2019-09-30"],
@@ -44,7 +44,7 @@
     "threshold": 0.12
   },
   {
-    "name": "Turkish Earthquake (Antakya)",
+    "name": "Turkey Earthquake",
     "description": "Central Antakya destruction following the February 6, 2023 earthquake. Collapsed buildings visible in change signal.",
     "bbox": [36.14, 36.19, 36.24, 36.27],
     "before_range": ["2022-11-01", "2023-01-31"],
