@@ -284,3 +284,15 @@ def test_build_folium_map_uses_fit_bounds():
     m = build_folium_map(bbox=bbox)
     html = m._repr_html_()
     assert "fitBounds" in html
+
+
+def test_build_folium_map_has_legend():
+    """Heatmap map should include a color legend."""
+    from src.visualization import build_folium_map, index_to_rgba
+    import numpy as np
+    delta = np.random.RandomState(42).randn(64, 64).astype(np.float32) * 0.3
+    heatmap = index_to_rgba(delta, threshold=0.05)
+    bbox = (-115.20, 36.10, -115.15, 36.15)
+    m = build_folium_map(bbox=bbox, heatmap_image=heatmap, show_heatmap=True)
+    html = m._repr_html_()
+    assert "Loss" in html and "Gain" in html

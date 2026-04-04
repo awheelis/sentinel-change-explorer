@@ -333,6 +333,27 @@ def build_folium_map(
     if heatmap_image is not None and show_heatmap:
         _image_to_bounds_overlay(heatmap_image, bbox, name="Change Heatmap", opacity=1.0).add_to(m)
 
+        # Add color legend
+        legend_html = """
+        <div style="
+            position: fixed;
+            bottom: 30px; right: 30px;
+            z-index: 1000;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 13px;
+            line-height: 1.6;
+        ">
+            <b>Change Legend</b><br>
+            <span style="display:inline-block;width:16px;height:12px;background:#d73027;border:1px solid #999;"></span> Loss<br>
+            <span style="display:inline-block;width:16px;height:12px;background:#ccc;border:1px solid #999;"></span> No Change<br>
+            <span style="display:inline-block;width:16px;height:12px;background:#4575b4;border:1px solid #999;"></span> Gain
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(legend_html))
+
     if overture_context is not None and show_overture:
         # Cap feature counts to keep the folium HTML payload under
         # Streamlit's 200 MB message-size limit.  Dense urban areas
