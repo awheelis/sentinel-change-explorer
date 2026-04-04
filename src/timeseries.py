@@ -5,10 +5,114 @@ values, and provides rolling statistics with anomaly detection.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
 import numpy as np
+
+from src.indices import compute_evi, compute_mndwi, compute_ndbi, compute_ndvi
+from src.masking import apply_mask, build_scl_mask
+from src.sentinel import load_bands, search_scenes
 
 
 _CLOUDY_THRESHOLD = 30.0  # valid_pixel_pct below this → "mostly clouded"
+
+_TS_CACHE_DIR = Path(__file__).resolve().parent.parent / "cache" / "timeseries"
+
+INDEX_BANDS: dict[str, list[str]] = {
+    "ndvi": ["nir", "red"],
+    "ndbi": ["swir16", "nir"],
+    "mndwi": ["green", "swir16"],
+    "evi": ["nir", "red", "blue"],
+}
+
+_INDEX_COMPUTE = {
+    "ndvi": lambda b: compute_ndvi(b["nir"], b["red"]),
+    "ndbi": lambda b: compute_ndbi(b["swir16"], b["nir"]),
+    "mndwi": lambda b: compute_mndwi(b["green"], b["swir16"]),
+    "evi": lambda b: compute_evi(b["nir"], b["red"], b["blue"]),
+}
+
+
+def fetch_time_series(
+    bbox: tuple[float, float, float, float],
+    date_span: str,
+    index_name: str,
+    max_cloud_cover: float = 20.0,
+    apply_scl_mask: bool = True,
+) -> list[dict]:
+    """Fetch all scenes in a date span and compute per-scene mean index values.
+
+    Args:
+        bbox: Bounding box as (west, south, east, north) in WGS84.
+        date_span: ISO 8601 interval, e.g. "2023-06-01/2024-06-30".
+        index_name: One of "ndvi", "ndbi", "mndwi", "evi".
+        max_cloud_cover: Maximum cloud cover percentage filter.
+        apply_scl_mask: If True, mask clouds/shadows via SCL before computing index.
+
+    Returns:
+        List of scene dicts sorted by datetime, each with keys:
+        datetime, scene_id, mean_index, cloud_cover, valid_pixel_pct.
+        Returns empty list if no scenes found.
+    """
+    # Check disk cache
+    cache_key_str = f"{bbox}|{date_span}|{index_name}|{max_cloud_cover}|{apply_scl_mask}"
+    cache_hash = hashlib.md5(cache_key_str.encode()).hexdigest()
+    cache_path = _TS_CACHE_DIR / f"{cache_hash}.json"
+
+    if cache_path.exists():
+        with open(cache_path) as f:
+            return json.load(f)
+
+    scenes = search_scenes(bbox=bbox, date_range=date_span, max_cloud_cover=max_cloud_cover, max_items=20)
+    if not scenes:
+        return []
+
+    band_keys = list(INDEX_BANDS[index_name])
+    if apply_scl_mask:
+        band_keys.append("scl")
+
+    compute_fn = _INDEX_COMPUTE[index_name]
+
+    def _process_scene(scene):
+        bands = load_bands(scene=scene, bbox=bbox, band_keys=band_keys, target_res=60)
+
+        if apply_scl_mask and "scl" in bands:
+            scl_mask = build_scl_mask(bands["scl"])
+            bands = apply_mask(bands, scl_mask)
+
+        index_arr = compute_fn(bands)
+        valid_mask = np.isfinite(index_arr)
+        valid_count = int(valid_mask.sum())
+        total_count = index_arr.size
+        valid_pct = (valid_count / total_count * 100) if total_count > 0 else 0.0
+        mean_val = float(np.nanmean(index_arr)) if valid_count > 0 else float("nan")
+
+        return {
+            "datetime": scene["datetime"],
+            "scene_id": scene["id"],
+            "mean_index": mean_val,
+            "cloud_cover": scene["cloud_cover"],
+            "valid_pixel_pct": valid_pct,
+        }
+
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {executor.submit(_process_scene, s): s for s in scenes}
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    # Sort chronologically (search_scenes returns by cloud cover)
+    results.sort(key=lambda r: r["datetime"])
+
+    # Cache to disk
+    _TS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(results, f)
+
+    return results
 
 
 def compute_anomalies(
