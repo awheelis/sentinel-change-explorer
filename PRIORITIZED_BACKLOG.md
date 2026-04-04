@@ -73,33 +73,17 @@ Consolidated from ISSUES.md, NEXT_FEATURES.md, and ENHANCEMENT_ROADMAP.md. Items
 
 ---
 
-### 5. Configurable S3/Rasterio Environment Variables
+### 5. ~~Configurable S3/Rasterio Environment Variables~~ DONE
 
-**Why:** `sentinel.py` hardcodes S3 configuration (unsigned access, region, etc.). If the AWS endpoint changes or users need custom S3 config (corporate proxy, alternate endpoint), source edits are required.
-
-**Fix:** Load S3 configuration from environment variables or a config file, with current values as defaults.
-
-**Complexity:** Low.
+**Status:** Already implemented — `_RASTERIO_ENV` in `sentinel.py` reads all values from `os.environ` with sensible defaults. No further work needed.
 
 ---
 
 ## Tier 3 — High Impact, High Effort
 
-### 6. Time-Series Mode
+### 6. ~~Time-Series Mode~~ DONE
 
-**Why (Kevin):** Bi-temporal comparison gives one snapshot of change. Real environmental monitoring requires trend detection — seasonal decomposition, break-point detection, recovery tracking. "A wildfire doesn't just happen; there's a progression of drying vegetation, fire, and recovery."
-
-**Implementation:**
-- Add "Time Series" mode toggle in sidebar
-- Query STAC for all scenes in full date span with cloud cover < 20%, capped at ~12 scenes
-- For each scene, load only the two bands needed for the selected index
-- Compute mean index value per scene for the bounding box
-- Plot line chart: x = date, y = index value; mark before/after dates with dashed lines
-- Mark anomalies (> 2 standard deviations from rolling mean)
-- Run fetches concurrently using existing `ThreadPoolExecutor` pattern
-- Cache results keyed on `(bbox, full_date_span, index, max_cloud)`
-
-**Complexity:** Medium-High. Requires fetching many scenes and new temporal visualization UI.
+**Status:** Implemented in `src/timeseries.py` + `time_series_chart()` in `src/visualization.py`. Fetches scenes across the full date span at 60m resolution, computes mean index per scene, detects anomalies with a rolling 2σ window, and renders a temporal trend chart below the folium map. Results cached on disk and in session state.
 
 ---
 
@@ -120,7 +104,11 @@ Consolidated from ISSUES.md, NEXT_FEATURES.md, and ENHANCEMENT_ROADMAP.md. Items
 ---
 
 ### 8. Foundation Model Integration (Proof of Concept)
+```
+INPUT FROM ALEX
 
+What if we trained our own small LeJEPA model and used that. THe LeWM paper on had a model with only 15m parameters. Perhaps that wouldn't be hard to store / pull from hugging face or run???
+```
 **Why (Kevin):** "Every serious geospatial company is investing in foundation models and deep learning for change detection. Your approach is the methodology from 2010. Show me you know where the field is going — even a branch with a simple experiment — and the conversation changes significantly."
 
 **Possible approaches:**
@@ -150,11 +138,11 @@ Consolidated from ISSUES.md, NEXT_FEATURES.md, and ENHANCEMENT_ROADMAP.md. Items
 | 2 | ~~SCL Cloud/Shadow Masking~~ DONE | 1 | Medium | High — eliminates cloud-driven false positives |
 | 3 | ~~Multi-Index Change Classification~~ DONE | 1 | Medium | High — semantic "why" behind changes |
 | 4 | ~~Folium Blank Map Fix~~ OBE | 2 | Low | Medium — first-impression polish |
-| 5 | Configurable S3 Env Vars | 2 | Low | Low — operational flexibility |
-| 6 | Time-Series Mode | 3 | Med-High | High — temporal analysis capability |
+| 5 | ~~Configurable S3 Env Vars~~ DONE | 2 | Low | Low — operational flexibility |
+| 6 | ~~Time-Series Mode~~ DONE | 3 | Med-High | High — temporal analysis capability |
 | 7 | Anomaly Detection Layer | 3 | Medium | Medium — multi-index compound insight |
 | 8 | Foundation Model PoC | 3 | High | High — demonstrates ML awareness |
 
-**Recommended order:** ~~1~~ → ~~2~~ → 3 → ~~4~~ → 5 → 6 → 7 → 8
+**Recommended order:** ~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ → ~~5~~ → ~~6~~ → 7 → 8
 
 Radiometric normalization and cloud masking improve scientific rigor of existing output. Multi-index classification adds a new analytical dimension with moderate effort. Time-series and ML work are longer-term investments that would move the project score from 7.5 toward 9+.

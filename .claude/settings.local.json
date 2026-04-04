@@ -10,7 +10,13 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(grep -v \"^$\")",
       "Bash(python -m pytest tests/test_indices.py -v --tb=short)",
-      "Bash(python3 -m pytest tests/test_overture_smoke.py --collect-only)"
+      "Bash(python3 -m pytest tests/test_overture_smoke.py --collect-only)",
+      "Bash(echo \"---EXIT:$?\")",
+      "Bash(chmod +x:*)",
+      "Bash(export CLAUDE_TOOL_INPUT='{\"command\":\"rm -rf /\"}')",
+      "Bash(bash /Users/alex_wheelis/Desktop/sentinel-change-explorer/.claude/hooks/guard.sh)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(export CLAUDE_TOOL_INPUT='{\"command\":\"find / -name *.py -delete\"}')"
     ]
   }
 }
