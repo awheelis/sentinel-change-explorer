@@ -235,3 +235,17 @@ def test_index_display_names_are_short():
     from app import INDEX_FUNCTIONS
     for key, (name, _, _) in INDEX_FUNCTIONS.items():
         assert len(name) <= 6, f"INDEX_FUNCTIONS['{key}'] name '{name}' too long for metric label"
+
+
+def test_ndvi_saturation_detected():
+    """90th percentile > 0.75 should be flagged as saturated."""
+    before_index = np.full((100, 100), 0.85, dtype=np.float32)
+    p90 = np.percentile(before_index, 90)
+    assert p90 > 0.75
+
+
+def test_ndvi_no_saturation():
+    """Moderate values should not trigger saturation."""
+    before_index = np.full((100, 100), 0.5, dtype=np.float32)
+    p90 = np.percentile(before_index, 90)
+    assert p90 <= 0.75

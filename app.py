@@ -443,6 +443,16 @@ def main() -> None:
     delta = compute_change(before=before_index, after=after_index)
     THRESHOLD = st.session_state.get("threshold", 0.10)
 
+    # ── NDVI saturation warning ──────────────────────────────────────────
+    if index_choice == "ndvi":
+        p90 = float(np.percentile(before_index, 90))
+        if p90 > 0.75:
+            st.warning(
+                f"NDVI appears saturated in this region (90th percentile: {p90:.2f}). "
+                f"Dense vegetation compresses NDVI's dynamic range. "
+                f"Consider switching to **EVI** for better sensitivity to canopy changes."
+            )
+
     # ── Build images ──────────────────────────────────────────────────────────
     before_img = true_color_image(
         before_bands["red"], before_bands["green"], before_bands["blue"], gamma=gamma,
