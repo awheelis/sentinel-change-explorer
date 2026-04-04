@@ -463,3 +463,52 @@ def build_folium_map(
     if overlay_count >= 2:
         folium.LayerControl(collapsed=False).add_to(m)
     return m
+
+
+# ── Multi-index change classification rendering ─────────────────────────
+
+# (R, G, B) per category — keyed by the integer codes from src.indices
+_CLASSIFICATION_COLORS: dict[int, tuple[int, int, int]] = {
+    0: (0, 0, 0),          # UNCHANGED — not rendered (transparent)
+    1: (255, 165, 0),      # URBAN_CONVERSION — Orange
+    2: (220, 38, 38),      # VEGETATION_LOSS — Red
+    3: (59, 130, 246),     # FLOODING — Blue
+    4: (34, 197, 94),      # VEGETATION_GAIN — Green
+}
+
+_CLASSIFICATION_LABELS: dict[int, str] = {
+    1: "Urban Conversion",
+    2: "Vegetation Loss",
+    3: "Flooding / Water Gain",
+    4: "Vegetation Gain",
+}
+
+
+def classification_to_rgba(
+    categories: np.ndarray,
+    alpha: float = 0.7,
+) -> Image.Image:
+    """Convert a classification category array to an RGBA PIL Image.
+
+    Args:
+        categories: 2D uint8 array of category codes from classify_change().
+        alpha: Opacity for classified pixels (0-1). Unchanged pixels are
+            always transparent.
+
+    Returns:
+        RGBA PIL Image sized to match the input array.
+    """
+    h, w = categories.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+
+    for code, (r, g, b) in _CLASSIFICATION_COLORS.items():
+        mask = categories == code
+        rgba[mask, 0] = r
+        rgba[mask, 1] = g
+        rgba[mask, 2] = b
+
+    # Unchanged pixels stay transparent; all others get requested alpha
+    changed = categories != 0
+    rgba[changed, 3] = int(alpha * 255)
+
+    return Image.fromarray(rgba, mode="RGBA")
