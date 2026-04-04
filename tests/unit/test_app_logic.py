@@ -1,5 +1,7 @@
 """Unit tests for app.py logic: warm-up, bbox validation, memory guard, index dispatch."""
+import json
 import math
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -281,3 +283,26 @@ def test_quality_rating_sun_yellow():
 def test_quality_rating_sun_red():
     from app import quality_rating
     assert quality_rating(15.0, thresholds=(30, 20), lower_is_worse=True) == "red"
+
+
+PRESETS_FILE = Path(__file__).resolve().parents[2] / "config" / "presets.json"
+
+
+class TestPresetNewsUrls:
+    def _load_presets(self):
+        with open(PRESETS_FILE) as f:
+            return json.load(f)
+
+    def test_every_preset_has_news_url(self):
+        presets = self._load_presets()
+        for preset in presets:
+            assert "news_url" in preset, f"Preset '{preset['name']}' missing 'news_url'"
+
+    def test_news_urls_are_https(self):
+        presets = self._load_presets()
+        for preset in presets:
+            url = preset["news_url"]
+            assert isinstance(url, str), f"Preset '{preset['name']}' news_url is not a string"
+            assert url.startswith("https://"), (
+                f"Preset '{preset['name']}' news_url must start with https://, got: {url}"
+            )
