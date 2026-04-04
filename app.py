@@ -409,7 +409,47 @@ def main() -> None:
     col_before.image(before_labeled, use_container_width=True)
     col_after.image(after_labeled, use_container_width=True)
 
-    # ── Panel D: Summary Statistics (before map to guarantee visibility) ─────
+    # Downscale overlay images to cap folium HTML payload size
+    MAX_OVERLAY_DIM = 800
+    def _downscale(img):
+        w, h = img.size
+        if max(w, h) <= MAX_OVERLAY_DIM:
+            return img
+        scale = MAX_OVERLAY_DIM / max(w, h)
+        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+    # ── Panel B: Change Detection Heatmap ────────────────────────────────────
+    st.subheader(f"Panel B — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
+
+    panel_b_map = build_folium_map(
+        bbox=bbox,
+        before_image=_downscale(before_img),
+        after_image=_downscale(after_img),
+        heatmap_image=heatmap_img,
+        show_heatmap=True,
+        show_overture=False,
+        enable_draw=True,
+    )
+    map_data = st_folium(panel_b_map, width="100%", height=500, returned_objects=["last_active_drawing"])
+
+    # ── Panel C: Overture Maps Context ───────────────────────────────────────
+    if overture and show_overture:
+        st.subheader("Panel C — Overture Maps Context")
+        st.caption(
+            f"{len(overture.get('building', []))} buildings, "
+            f"{len(overture.get('segment', []))} road segments, "
+            f"{len(overture.get('place', []))} places"
+        )
+        panel_c_map = build_folium_map(
+            bbox=bbox,
+            heatmap_image=heatmap_img,
+            overture_context=overture,
+            show_heatmap=True,
+            show_overture=True,
+        )
+        st_folium(panel_c_map, width="100%", height=500)
+
+    # ── Panel D: Summary Statistics ──────────────────────────────────────────
     st.subheader("Panel D — Summary Statistics")
 
     area_deg2 = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
@@ -451,46 +491,6 @@ def main() -> None:
                          f"Cloud: {after_scene['cloud_cover']:.1f}%")
 
     st.pyplot(change_histogram(delta, threshold=THRESHOLD))
-
-    # Downscale overlay images to cap folium HTML payload size
-    MAX_OVERLAY_DIM = 800
-    def _downscale(img):
-        w, h = img.size
-        if max(w, h) <= MAX_OVERLAY_DIM:
-            return img
-        scale = MAX_OVERLAY_DIM / max(w, h)
-        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-
-    # ── Panel B: Change Detection Heatmap ────────────────────────────────────
-    st.subheader(f"Panel B — {INDEX_FUNCTIONS[index_choice][0]} Change Heatmap")
-
-    panel_b_map = build_folium_map(
-        bbox=bbox,
-        before_image=_downscale(before_img),
-        after_image=_downscale(after_img),
-        heatmap_image=heatmap_img,
-        show_heatmap=True,
-        show_overture=False,
-        enable_draw=True,
-    )
-    map_data = st_folium(panel_b_map, width="100%", height=500, returned_objects=["last_active_drawing"])
-
-    # ── Panel C: Overture Maps Context ───────────────────────────────────────
-    if overture and show_overture:
-        st.subheader("Panel C — Overture Maps Context")
-        st.caption(
-            f"{len(overture.get('building', []))} buildings, "
-            f"{len(overture.get('segment', []))} road segments, "
-            f"{len(overture.get('place', []))} places"
-        )
-        panel_c_map = build_folium_map(
-            bbox=bbox,
-            heatmap_image=heatmap_img,
-            overture_context=overture,
-            show_heatmap=True,
-            show_overture=True,
-        )
-        st_folium(panel_c_map, width="100%", height=500)
 
     # Read drawn geometry and update bbox session state
     if map_data and map_data.get("last_active_drawing"):
