@@ -27,6 +27,12 @@ def _safe_normalized_diff(
     Returns:
         float32 array of normalized difference values clipped to [-1, 1].
     """
+    if a.shape != b.shape:
+        raise ValueError(
+            f"Band shape mismatch: {a.shape} vs {b.shape}. "
+            f"Ensure both bands are resampled to the same resolution."
+        )
+
     if chunk_rows is None and a.nbytes > _CHUNK_THRESHOLD_BYTES:
         chunk_rows = 512
 

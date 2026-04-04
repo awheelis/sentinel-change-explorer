@@ -121,3 +121,14 @@ class TestChunkedComputation:
         result = _safe_normalized_diff(zeros, zeros, chunk_rows=10)
         assert not np.any(np.isnan(result))
         assert not np.any(np.isinf(result))
+
+
+def test_safe_normalized_diff_rejects_shape_mismatch():
+    """Should raise ValueError when input arrays have different shapes."""
+    import pytest
+    import numpy as np
+    from src.indices import _safe_normalized_diff
+    a = np.ones((64, 64), dtype=np.uint16)
+    b = np.ones((64, 32), dtype=np.uint16)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        _safe_normalized_diff(a, b)
