@@ -458,21 +458,28 @@ def main() -> None:
     map_data = st_folium(panel_b_map, width="100%", height=500, returned_objects=["last_active_drawing"])
 
     # ── Panel C: Overture Maps Context ───────────────────────────────────────
-    if overture and show_overture:
+    if show_overture:
         st.subheader("Panel C — Overture Maps Context")
-        st.caption(
-            f"{len(overture.get('building', []))} buildings, "
-            f"{len(overture.get('segment', []))} road segments, "
-            f"{len(overture.get('place', []))} places"
-        )
-        panel_c_map = build_folium_map(
-            bbox=bbox,
-            heatmap_image=heatmap_img,
-            overture_context=overture,
-            show_heatmap=True,
-            show_overture=True,
-        )
-        st_folium(panel_c_map, width="100%", height=500)
+        if not overture or all(
+            len(overture.get(layer, [])) == 0
+            for layer in ("building", "segment", "place")
+        ):
+            st.info("No Overture Maps data available for this region. "
+                     "This may be due to sparse coverage or a fetch timeout.")
+        else:
+            st.caption(
+                f"{len(overture.get('building', []))} buildings, "
+                f"{len(overture.get('segment', []))} road segments, "
+                f"{len(overture.get('place', []))} places"
+            )
+            panel_c_map = build_folium_map(
+                bbox=bbox,
+                heatmap_image=heatmap_img,
+                overture_context=overture,
+                show_heatmap=True,
+                show_overture=True,
+            )
+            st_folium(panel_c_map, width="100%", height=500)
 
     # ── Panel D: Summary Statistics ──────────────────────────────────────────
     st.subheader("Panel D — Summary Statistics")
