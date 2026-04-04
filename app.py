@@ -37,6 +37,8 @@ from src.indices import (
 from src.masking import apply_mask, build_scl_mask, mask_percentage, union_masks
 from src.normalization import normalize_pif
 from src.overture import get_overture_context
+import matplotlib.pyplot as plt
+from src.timeseries import compute_anomalies, fetch_time_series, format_summary_caption
 from src.visualization import (
     build_folium_map,
     change_histogram,
@@ -45,6 +47,7 @@ from src.visualization import (
     google_maps_url,
     index_to_rgba,
     label_image,
+    time_series_chart,
     true_color_image,
 )
 
@@ -662,6 +665,57 @@ def main() -> None:
                 show_overture=True,
             )
             st_folium(panel_c_map, width="100%", height=500)
+
+    # ── Temporal Trend ──────────────────────────────────────────────────────
+    ts_cache_key = f"{bbox}|{before_range}|{after_range}|{max_cloud}|ts|{index_choice}|{st.session_state.get('apply_scl_mask', True)}"
+    ts_cached = st.session_state["_results"].get(ts_cache_key)
+
+    if ts_cached is not None:
+        ts_series = ts_cached["series"]
+        ts_anomalies = ts_cached["anomalies"]
+    else:
+        ts_series = None
+        ts_anomalies = None
+
+    if ts_series is None:
+        with st.status("Loading temporal trend\u2026", expanded=False) as ts_status:
+            try:
+                date_span = f"{before_start}/{after_end}"
+                ts_series = fetch_time_series(
+                    bbox=bbox,
+                    date_span=date_span,
+                    index_name=index_choice,
+                    max_cloud_cover=max_cloud,
+                    apply_scl_mask=st.session_state.get("apply_scl_mask", True),
+                )
+                if ts_series:
+                    ts_anomalies = compute_anomalies(ts_series)
+                    st.session_state["_results"][ts_cache_key] = {
+                        "series": ts_series,
+                        "anomalies": ts_anomalies,
+                    }
+                    ts_status.update(label=f"Temporal trend loaded ({len(ts_series)} scenes)", state="complete")
+                else:
+                    ts_status.update(label="No scenes found for temporal trend", state="complete")
+            except Exception as exc:
+                ts_status.update(label=f"Temporal trend failed: {exc}", state="error")
+                ts_series = None
+                ts_anomalies = None
+
+    if ts_series and ts_anomalies is not None:
+        st.subheader("Temporal Trend")
+        fig = time_series_chart(
+            ts_series,
+            ts_anomalies,
+            index_name=index_choice,
+            before_date=str(before_start),
+            after_date=str(after_end),
+        )
+        st.pyplot(fig)
+        plt.close(fig)
+        st.caption(format_summary_caption(ts_anomalies))
+    elif ts_series is not None and ts_anomalies is None and len(ts_series) > 0:
+        st.info("All scenes in the time-series had insufficient cloud-free coverage for temporal analysis.")
 
     # ── Panel D: Summary Statistics ──────────────────────────────────────────
     st.subheader("Panel D — Summary Statistics")
