@@ -250,14 +250,17 @@ def main() -> None:
             format_func=lambda k: _INDEX_LABELS[k],
             key="index_choice",
         )
-        st.slider(
-            "Change threshold",
-            min_value=0.01,
-            max_value=0.30,
-            step=0.01,
-            key="threshold",
-            help="Minimum change magnitude to classify as gain/loss. Higher = less noise.",
-        )
+        auto_threshold = st.checkbox("Auto threshold (Otsu)", value=False, key="auto_threshold",
+            help="Automatically compute the optimal change threshold from the data.")
+        if not auto_threshold:
+            st.slider(
+                "Change threshold",
+                min_value=0.01,
+                max_value=0.30,
+                step=0.01,
+                key="threshold",
+                help="Minimum change magnitude to classify as gain/loss.",
+            )
         colormap = st.selectbox(
             "Colormap",
             ["RdBu", "RdYlBu", "PiYG"],
@@ -441,7 +444,12 @@ def main() -> None:
     before_index = compute_index_for_bands(index_choice, before_bands)
     after_index = compute_index_for_bands(index_choice, after_bands)
     delta = compute_change(before=before_index, after=after_index)
-    THRESHOLD = st.session_state.get("threshold", 0.10)
+    if st.session_state.get("auto_threshold", False):
+        from src.indices import compute_adaptive_threshold
+        THRESHOLD = compute_adaptive_threshold(delta)
+        st.session_state["threshold"] = THRESHOLD
+    else:
+        THRESHOLD = st.session_state.get("threshold", 0.10)
 
     # ── NDVI saturation warning ──────────────────────────────────────────
     if index_choice == "ndvi":
@@ -533,6 +541,8 @@ def main() -> None:
     stat_cols[1].metric(f"{INDEX_FUNCTIONS[index_choice][0]} gain", f"{pct_gain:.1f}%")
     stat_cols[2].metric(f"{INDEX_FUNCTIONS[index_choice][0]} loss", f"{pct_loss:.1f}%")
     stat_cols[3].metric("Unchanged", f"{pct_unchanged:.1f}%")
+    threshold_mode = "auto / Otsu" if st.session_state.get("auto_threshold", False) else "manual"
+    st.caption(f"Threshold: {THRESHOLD:.3f} ({threshold_mode})")
 
     # All indices summary (spec requirement: show all three simultaneously)
     st.markdown("**All Indices Summary**")

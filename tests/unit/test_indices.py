@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 from src.indices import compute_ndvi, compute_ndbi, compute_mndwi, compute_change, compute_evi
+from src.indices import compute_adaptive_threshold
 
 
 def _make_band(value: float, shape: tuple = (4, 4)) -> np.ndarray:
@@ -171,6 +172,32 @@ class TestEVI:
         blue = np.ones((4, 2), dtype=np.float32)
         with pytest.raises(ValueError, match="shape mismatch"):
             compute_evi(nir, red, blue)
+
+
+class TestAdaptiveThreshold:
+    def test_bimodal_distribution(self):
+        """Threshold should fall between two clear clusters."""
+        unchanged = np.random.normal(0.0, 0.02, size=8000).astype(np.float32)
+        changed = np.random.normal(0.3, 0.02, size=2000).astype(np.float32)
+        delta = np.concatenate([unchanged, changed]).reshape(100, 100)
+        threshold = compute_adaptive_threshold(delta)
+        assert 0.05 < threshold < 0.25, f"Expected threshold between clusters, got {threshold}"
+
+    def test_uniform_returns_fallback(self):
+        """Uniform data with no clear separation should return fallback."""
+        delta = np.zeros((50, 50), dtype=np.float32)
+        threshold = compute_adaptive_threshold(delta)
+        assert threshold == 0.10
+
+    def test_returns_float(self):
+        delta = np.random.randn(20, 20).astype(np.float32) * 0.2
+        threshold = compute_adaptive_threshold(delta)
+        assert isinstance(threshold, float)
+
+    def test_positive_result(self):
+        delta = np.random.randn(50, 50).astype(np.float32) * 0.3
+        threshold = compute_adaptive_threshold(delta)
+        assert threshold > 0
 
 
 def test_safe_normalized_diff_rejects_shape_mismatch():

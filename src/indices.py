@@ -155,3 +155,54 @@ def compute_change(before: np.ndarray, after: np.ndarray) -> np.ndarray:
         float32 difference array. Positive = gain, negative = loss.
     """
     return (after.astype(np.float32) - before.astype(np.float32))
+
+
+def compute_adaptive_threshold(
+    delta: np.ndarray, fallback: float = 0.10, n_bins: int = 256,
+) -> float:
+    """Compute an adaptive change threshold using Otsu's method.
+
+    Applies Otsu's algorithm to the absolute delta values to find the
+    optimal boundary between "unchanged" and "changed" pixel populations.
+
+    Args:
+        delta: 2D float32 change array (after - before).
+        fallback: Value returned when data has no variance (e.g. all zeros).
+        n_bins: Number of histogram bins for Otsu computation.
+
+    Returns:
+        Optimal threshold as a positive float.
+    """
+    abs_delta = np.abs(delta).ravel().astype(np.float64)
+    abs_delta = abs_delta[np.isfinite(abs_delta)]
+    if len(abs_delta) == 0 or abs_delta.max() == abs_delta.min():
+        return fallback
+
+    counts, bin_edges = np.histogram(abs_delta, bins=n_bins, range=(0, abs_delta.max()))
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+    total = counts.sum()
+    if total == 0:
+        return fallback
+
+    weight_bg = 0.0
+    sum_bg = 0.0
+    sum_total = np.dot(counts.astype(np.float64), bin_centers)
+    best_thresh = fallback
+    best_variance = 0.0
+
+    for i in range(len(counts)):
+        weight_bg += counts[i]
+        if weight_bg == 0:
+            continue
+        weight_fg = total - weight_bg
+        if weight_fg == 0:
+            break
+        sum_bg += counts[i] * bin_centers[i]
+        mean_bg = sum_bg / weight_bg
+        mean_fg = (sum_total - sum_bg) / weight_fg
+        variance = weight_bg * weight_fg * (mean_bg - mean_fg) ** 2
+        if variance > best_variance:
+            best_variance = variance
+            best_thresh = float(bin_centers[i])
+
+    return best_thresh
