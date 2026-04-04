@@ -249,7 +249,6 @@ def main() -> None:
             format_func=lambda k: _INDEX_LABELS[k],
             key="index_choice",
         )
-        show_overture = st.checkbox("Show Overture Maps layers", value=True)
         st.slider(
             "Change threshold",
             min_value=0.01,
@@ -258,6 +257,22 @@ def main() -> None:
             key="threshold",
             help="Minimum change magnitude to classify as gain/loss. Higher = less noise.",
         )
+        colormap = st.selectbox(
+            "Colormap",
+            ["RdBu", "RdYlBu", "PiYG"],
+            key="colormap",
+            help="Color scheme for the change heatmap.",
+        )
+        gamma = st.slider(
+            "Gamma correction",
+            min_value=0.5,
+            max_value=1.5,
+            step=0.05,
+            value=0.85,
+            key="gamma",
+            help="Adjust brightness of true-color images. Lower = brighter.",
+        )
+        show_overture = st.checkbox("Show Overture Maps layers", value=True)
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
 
@@ -419,12 +434,12 @@ def main() -> None:
 
     # ── Build images ──────────────────────────────────────────────────────────
     before_img = true_color_image(
-        before_bands["red"], before_bands["green"], before_bands["blue"]
+        before_bands["red"], before_bands["green"], before_bands["blue"], gamma=gamma,
     )
     after_img = true_color_image(
-        after_bands["red"], after_bands["green"], after_bands["blue"]
+        after_bands["red"], after_bands["green"], after_bands["blue"], gamma=gamma,
     )
-    heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=THRESHOLD)
+    heatmap_img = index_to_rgba(downscale_array(delta, max_dim=800), threshold=THRESHOLD, colormap=colormap)
 
     # ── Panel A: True Color Comparison ────────────────────────────────────────
     st.subheader("Panel A — True Color Comparison")
