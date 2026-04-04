@@ -296,3 +296,14 @@ def test_build_folium_map_has_legend():
     m = build_folium_map(bbox=bbox, heatmap_image=heatmap, show_heatmap=True)
     html = m._repr_html_()
     assert "Loss" in html and "Gain" in html
+
+
+def test_change_histogram_labels():
+    """Histogram should use user-friendly axis labels."""
+    import numpy as np
+    from src.visualization import change_histogram
+    delta = np.random.RandomState(42).randn(100, 100).astype(np.float32) * 0.3
+    fig = change_histogram(delta, threshold=0.1, index_name="NDVI")
+    ax = fig.axes[0]
+    assert "%" in ax.get_ylabel() or "Proportion" in ax.get_ylabel()
+    assert "NDVI" in ax.get_xlabel()

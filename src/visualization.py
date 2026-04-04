@@ -188,6 +188,7 @@ def change_histogram(
     delta: np.ndarray,
     threshold: float = 0.05,
     bins: int = 50,
+    index_name: str = "Index",
 ) -> matplotlib.figure.Figure:
     """Create a histogram of change delta values with threshold markers.
 
@@ -205,7 +206,10 @@ def change_histogram(
     flat = delta.ravel()
 
     fig, ax = plt.subplots()
-    counts, edges, patches = ax.hist(flat, bins=bins, edgecolor="black", linewidth=0.3)
+    weights = np.ones_like(flat) / len(flat) * 100
+    counts, edges, patches = ax.hist(
+        flat, bins=bins, weights=weights, edgecolor="black", linewidth=0.3,
+    )
 
     # Color each bar based on its bin center
     for patch, left_edge, right_edge in zip(patches, edges[:-1], edges[1:]):
@@ -220,8 +224,12 @@ def change_histogram(
     ax.axvline(-threshold, color="black", linestyle="--", linewidth=1)
     ax.axvline(threshold, color="black", linestyle="--", linewidth=1)
 
-    ax.set_xlabel("Delta Index Value")
-    ax.set_ylabel("Pixel Count")
+    y_top = ax.get_ylim()[1]
+    ax.text(-threshold, y_top * 0.95, " Loss\n threshold", fontsize=8, va="top")
+    ax.text(threshold, y_top * 0.95, " Gain\n threshold", fontsize=8, va="top")
+
+    ax.set_xlabel(f"{index_name} Change Magnitude")
+    ax.set_ylabel("Proportion of Area (%)")
     ax.set_title("Change Distribution")
 
     fig.tight_layout()

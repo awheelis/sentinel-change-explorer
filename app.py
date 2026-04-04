@@ -496,7 +496,7 @@ def main() -> None:
                          f"Date: {after_scene['datetime'][:10]}  \n"
                          f"Cloud: {after_scene['cloud_cover']:.1f}%")
 
-    st.pyplot(change_histogram(delta, threshold=THRESHOLD))
+    st.pyplot(change_histogram(delta, threshold=THRESHOLD, index_name=INDEX_FUNCTIONS[index_choice][0]))
 
     # Read drawn geometry and update bbox session state
     if map_data and map_data.get("last_active_drawing"):
