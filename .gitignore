@@ -16,4 +16,5 @@ cache/
 *.png
 !tests/fixtures/
 raw-assignment-email*
-.claude/worktrees/.worktrees/
+.claude/worktrees/
+.worktrees/
