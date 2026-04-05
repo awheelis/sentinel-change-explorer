@@ -28,6 +28,7 @@ experimental = [
     "torch>=2.2",
     "datasets>=2.19",
     "timm>=1.0",
+    "wandb>=0.25.1",
 ]
 
 [dependency-groups]
