@@ -318,13 +318,15 @@ def _extract_chips_from_bands(
     acquisition_date: str,
     source: str,
     preset_name: str | None,
+    chip_size: int = CHIP_SIZE,
 ) -> Iterator[dict[str, Any]]:
     """Tile-crop one band-dict into chip records, applying rejection rules.
 
     Stacks the 5 reflectance bands in ``REFLECTANCE_BANDS`` order into a
-    (5, H, W) tensor, slices into non-overlapping 128x128 chips in parallel
-    with the SCL band, computes cloud + fill fractions per chip, and yields
-    a record dict for every chip that passes the rejection thresholds.
+    (5, H, W) tensor, slices into non-overlapping ``chip_size`` × ``chip_size``
+    chips in parallel with the SCL band, computes cloud + fill fractions per
+    chip, and yields a record dict for every chip that passes the rejection
+    thresholds. Default ``chip_size`` preserves the original 128-px pipeline.
     """
     try:
         reflectance = np.stack([bands[k] for k in REFLECTANCE_BANDS], axis=0)
@@ -336,10 +338,10 @@ def _extract_chips_from_bands(
         logger.warning("Scene %s missing SCL band — skipping", scene_id)
         return
 
-    refl_chips = tile_crop(reflectance, chip_size=CHIP_SIZE)
+    refl_chips = tile_crop(reflectance, chip_size=chip_size)
     # Wrap SCL with a channel axis so tile_crop accepts it (it expects CxHxW),
     # then unwrap after cropping. This keeps tile_crop's signature strict.
-    scl_chips_wrapped = tile_crop(scl[np.newaxis, ...], chip_size=CHIP_SIZE)
+    scl_chips_wrapped = tile_crop(scl[np.newaxis, ...], chip_size=chip_size)
 
     for refl_chip, scl_chip_wrapped in zip(refl_chips, scl_chips_wrapped):
         scl_chip = scl_chip_wrapped[0]
@@ -429,19 +431,31 @@ def collect_preset_chips(
 
 def collect_global_chips(
     max_chips: int | None = None,
+    chip_size: int = CHIP_SIZE,
+    aoi_size_km: float = GLOBAL_AOI_SIZE_KM,
 ) -> Iterator[dict[str, Any]]:
     """Yield chip records from the hand-curated GLOBAL_POINTS list.
 
     Iterates every (point, date_range) pair, grabs the lowest-cloud scene
     per pair, tiles it, and yields survivors. Stops early if ``max_chips``
     is reached.
+
+    Args:
+        max_chips: Stop after this many survivors. ``None`` = exhaust list.
+        chip_size: Side length of each output chip in pixels. Default 128
+            preserves the original pipeline; the DINOv2-sharp path passes
+            256 so each scene yields a 32×32 feature grid at train time.
+        aoi_size_km: Edge length of each point's square AOI. The default
+            (5.12 km) gives 16 non-overlapping 128-px chips per scene; for
+            256-px chips the caller should pass ~25 km to keep chip yield
+            per scene high (≈ 100 chips).
     """
     from src.sentinel import load_bands, search_scenes
 
     yielded = 0
     for point in GLOBAL_POINTS:
         aoi_bbox = bbox_around_point(
-            lon=point["lon"], lat=point["lat"], size_km=GLOBAL_AOI_SIZE_KM
+            lon=point["lon"], lat=point["lat"], size_km=aoi_size_km
         )
         for date_range in point["dates"]:
             try:
@@ -475,6 +489,7 @@ def collect_global_chips(
                 acquisition_date=scene["datetime"][:10],
                 source="global",
                 preset_name=None,
+                chip_size=chip_size,
             ):
                 yield chip
                 yielded += 1
@@ -485,7 +500,7 @@ def collect_global_chips(
 # ── HuggingFace dataset assembly ─────────────────────────────────────────────
 
 
-def _build_features_spec():
+def _build_features_spec(chip_size: int = CHIP_SIZE):
     """Return the typed ``datasets.Features`` spec for one chip record.
 
     Imported lazily because ``datasets`` is only in the experimental extra.
@@ -493,7 +508,7 @@ def _build_features_spec():
     from datasets import Array3D, ClassLabel, Features, Sequence, Value
 
     return Features({
-        "bands": Array3D(shape=(len(REFLECTANCE_BANDS), CHIP_SIZE, CHIP_SIZE), dtype="uint16"),
+        "bands": Array3D(shape=(len(REFLECTANCE_BANDS), chip_size, chip_size), dtype="uint16"),
         "bbox": Sequence(Value("float64"), length=4),
         "acquisition_date": Value("string"),
         "scene_id": Value("string"),
@@ -502,7 +517,7 @@ def _build_features_spec():
     })
 
 
-def chips_to_dataset(chips: list[dict[str, Any]]):
+def chips_to_dataset(chips: list[dict[str, Any]], chip_size: int = CHIP_SIZE):
     """Assemble a list of chip dicts into a ``datasets.Dataset`` with a typed schema.
 
     ``preset_name`` is coerced to an empty string for global chips because
@@ -526,7 +541,7 @@ def chips_to_dataset(chips: list[dict[str, Any]]):
         for chip in chips
     ]
 
-    return Dataset.from_list(normalized, features=_build_features_spec())
+    return Dataset.from_list(normalized, features=_build_features_spec(chip_size))
 
 
 def split_train_val(dataset, val_fraction: float = 0.10, seed: int = 42):
@@ -858,6 +873,98 @@ def run_build(
     return out_path
 
 
+def run_global_build(
+    output_dir: Path | str,
+    max_chips: int = 5000,
+    chip_size: int = 256,
+    aoi_size_km: float = 25.6,
+    seed: int = 42,
+    push_to_hub: str | None = None,
+    private: bool = False,
+) -> Path:
+    """Global-diverse dataset build for the DINOv2-sharp LeJEPA fine-tune.
+
+    Skips the preset path entirely and draws chips only from ``GLOBAL_POINTS``.
+    Rationale: when the encoder is initialized from DINO ImageNet weights
+    it already encodes "what the world looks like" from natural images; the
+    fine-tuning data should maximize Sentinel-2 *spectral* diversity (biomes,
+    seasons) rather than memorize demo regions. Preset bias would pull
+    features back toward the 10 demo tiles, working against that goal.
+
+    AOI size defaults to 25.6 km (2560 m ÷ 10 m/px = 256 px × 10 = 10 chips
+    per side → ~100 non-overlapping 256-px chips per scene). With ~67 scene
+    queries from GLOBAL_POINTS this yields ~6700 raw chips, ~4500 after
+    cloud/fill rejection.
+
+    Args:
+        output_dir: Where to save the DatasetDict.
+        max_chips: Cap on kept chips (early-stop for cost control).
+        chip_size: Side length of each chip in pixels. 256 is the DINOv2-
+            sharp target; default preserves parameterization.
+        aoi_size_km: Edge length of the square AOI around each GLOBAL_POINTS
+            center. Scaled up from the original 5.12 km so each scene yields
+            many more tiles at 256 px.
+        seed: Train/val split seed.
+        push_to_hub: Optional HF repo id to publish to.
+        private: Whether the pushed repo is private.
+
+    Returns:
+        Absolute path to the saved dataset directory.
+    """
+    logger.info(
+        "Global-diverse build: max_chips=%d chip_size=%d aoi_km=%.1f",
+        max_chips, chip_size, aoi_size_km,
+    )
+    chips: list[dict[str, Any]] = []
+    for chip in collect_global_chips(
+        max_chips=max_chips, chip_size=chip_size, aoi_size_km=aoi_size_km
+    ):
+        chips.append(chip)
+        if len(chips) % 100 == 0:
+            logger.info("  progress: %d / %d", len(chips), max_chips)
+    logger.info("Collected %d global chips", len(chips))
+
+    if not chips:
+        raise RuntimeError(
+            "No chips collected — STAC search or load_bands failed for every "
+            "global point. Check network and STAC endpoint availability."
+        )
+
+    ds = chips_to_dataset(chips, chip_size=chip_size)
+    dd = split_train_val(ds, val_fraction=0.10, seed=seed)
+    stats = compute_norm_stats(dd["train"])
+    logger.info(
+        "Norm stats: mean=%s std=%s",
+        [round(m, 1) for m in stats["mean"]],
+        [round(s, 1) for s in stats["std"]],
+    )
+
+    out_path = save_dataset_bundle(dd, stats, output_dir=output_dir)
+
+    if push_to_hub is not None:
+        # Reuse the existing card template. The preset list is still shown
+        # for context (empty preset split), global_points_list is the real
+        # story. train/val sizes and norm stats come from the actual build.
+        presets_path = _REPO_ROOT / "config" / "presets.json"
+        with open(presets_path) as f:
+            presets = json.load(f)
+        card_md = render_dataset_card(
+            repo_id=push_to_hub,
+            presets=presets,
+            n_preset_chips=0,
+            n_global_chips=len(chips),
+            train_size=len(dd["train"]),
+            val_size=len(dd["validation"]),
+            norm_stats=stats,
+        )
+        url = push_dataset_to_hub(
+            dd, repo_id=push_to_hub, card_markdown=card_md, private=private
+        )
+        logger.info("Published to: %s", url)
+
+    return out_path
+
+
 def _cli() -> None:
     import argparse
 
@@ -901,6 +1008,34 @@ def _cli() -> None:
              "stats. Use only on production builds, not smoke tests.",
     )
     parser.add_argument(
+        "--global-diverse", action="store_true",
+        help=(
+            "Build a global-diverse dataset from GLOBAL_POINTS only (no "
+            "preset chips). Used by the DINO-init DINOv2-sharp path where "
+            "we want maximum Sentinel-2 biome/season diversity rather than "
+            "preset memorization. Pair with --chip-size 256."
+        ),
+    )
+    parser.add_argument(
+        "--chip-size", type=int, default=CHIP_SIZE,
+        help=(
+            f"Side length of each training chip in pixels (default "
+            f"{CHIP_SIZE}). Only used in --global-diverse mode."
+        ),
+    )
+    parser.add_argument(
+        "--aoi-size-km", type=float, default=25.6,
+        help=(
+            "Edge length of the square AOI per GLOBAL_POINTS center, in "
+            "kilometers. Default 25.6 km yields ~100 non-overlapping 256-px "
+            "chips per scene. Only used in --global-diverse mode."
+        ),
+    )
+    parser.add_argument(
+        "--max-chips", type=int, default=5000,
+        help="Cap on kept chips in --global-diverse mode.",
+    )
+    parser.add_argument(
         "--log-level", type=str, default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
     )
@@ -911,16 +1046,27 @@ def _cli() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    out = run_build(
-        output_dir=args.output,
-        n_preset=args.n_preset,
-        n_global=args.n_global,
-        max_scenes_per_range=args.max_scenes_per_range,
-        seed=args.seed,
-        push_to_hub=args.push_to_hub,
-        private=args.private,
-        copy_norm_stats_to_repo=args.copy_norm_stats_to_repo,
-    )
+    if args.global_diverse:
+        out = run_global_build(
+            output_dir=args.output,
+            max_chips=args.max_chips,
+            chip_size=args.chip_size,
+            aoi_size_km=args.aoi_size_km,
+            seed=args.seed,
+            push_to_hub=args.push_to_hub,
+            private=args.private,
+        )
+    else:
+        out = run_build(
+            output_dir=args.output,
+            n_preset=args.n_preset,
+            n_global=args.n_global,
+            max_scenes_per_range=args.max_scenes_per_range,
+            seed=args.seed,
+            push_to_hub=args.push_to_hub,
+            private=args.private,
+            copy_norm_stats_to_repo=args.copy_norm_stats_to_repo,
+        )
     logger.info("Done. Dataset saved to: %s", out)
 
 

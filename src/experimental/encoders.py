@@ -148,19 +148,159 @@ class FiveChannelViTPatch8(nn.Module):
         return feats.transpose(1, 2).reshape(B, D, gs, gs)
 
 
-def build_encoder(kind: EncoderKind) -> nn.Module:
+def load_dino_weights_into_vit_small_patch8(model: FiveChannelViTPatch8) -> None:
+    """Load DINO's `vit_small_patch8_224.dino` ImageNet-pretrained weights into
+    our 5-band, 4-register ViT-Small/8 wrapper, adapting the architectural
+    deltas:
+
+    - **3→5 channel stem:** DINO's `patch_embed.proj.weight` is
+      ``[384, 3, 8, 8]``. We copy the RGB slice into channels 0–2 of our
+      ``[384, 5, 8, 8]`` target and initialize channels 3–4 (NIR, SWIR16)
+      from the per-filter mean of the RGB weights. Standard EO-adaptation
+      trick (Clay, SatMAE, Prithvi).
+    - **Positional embedding:** DINO's pos_embed is ``[1, 785, 384]``
+      (1 CLS + 28×28 patches at 224/8). Ours is ``[1, 1028, 384]``
+      (4 register slots + 32×32 patches at 256/8). We drop DINO's CLS row,
+      reshape the remaining 784 patch embeddings to ``[1, 28, 28, 384]``,
+      bicubic-interpolate to ``[1, 32, 32, 384]``, flatten, and splice into
+      positions [4:1028] of our pos_embed. Positions [0:4] (the register
+      slots) remain at timm's default init — they learn their role during
+      fine-tuning while the patch positions carry DINO's spatial prior.
+    - **CLS token:** DINO has one; we don't (``class_token=False``).
+      Silently dropped.
+    - **Register tokens:** We have four; DINO has none. Left at default
+      init — the transformer blocks still carry DINO's semantic weights
+      and register tokens rapidly adapt during SSL fine-tuning.
+    - **Transformer blocks, final norm:** copied verbatim (shape-identical).
+
+    Raises:
+        RuntimeError: If the target model isn't a Small/8 variant or if
+            timm's layout has drifted such that the expected shapes don't
+            match at runtime (fail loud rather than silently mis-init).
+    """
+    import timm
+    import torch.nn.functional as F
+
+    if model.variant != "small":
+        raise RuntimeError(
+            f"DINO pretrained init is only available for ViT-Small/8; "
+            f"got variant={model.variant!r}"
+        )
+    if model.vit.patch_embed.proj.weight.shape != (384, 5, 8, 8):
+        raise RuntimeError(
+            f"unexpected patch_embed.proj.weight shape "
+            f"{tuple(model.vit.patch_embed.proj.weight.shape)}, expected (384, 5, 8, 8)"
+        )
+
+    # Download DINO weights. timm caches these in ~/.cache/huggingface so
+    # subsequent calls are offline.
+    dino = timm.create_model(
+        "vit_small_patch8_224.dino", pretrained=True, num_classes=0
+    )
+    src = dino.state_dict()
+
+    target_sd = model.vit.state_dict()
+
+    # ── 1. Patch embed stem: 3 → 5 channels ─────────────────────────────
+    src_stem_w = src["patch_embed.proj.weight"]  # [384, 3, 8, 8]
+    assert src_stem_w.shape == (384, 3, 8, 8), src_stem_w.shape
+    rgb_mean = src_stem_w.mean(dim=1, keepdim=True)  # [384, 1, 8, 8]
+    new_stem_w = torch.cat(
+        [src_stem_w, rgb_mean, rgb_mean], dim=1
+    )  # [384, 5, 8, 8]
+    target_sd["patch_embed.proj.weight"] = new_stem_w
+    target_sd["patch_embed.proj.bias"] = src["patch_embed.proj.bias"].clone()
+
+    # ── 2. Positional embedding: 1+784 → 4+1024 ─────────────────────────
+    src_pos = src["pos_embed"]  # [1, 785, 384]
+    assert src_pos.shape == (1, 785, 384), src_pos.shape
+    src_patch_pos = src_pos[:, 1:, :]  # drop CLS → [1, 784, 384]
+    # Reshape to 2D grid for bicubic interpolation
+    src_grid = src_patch_pos.reshape(1, 28, 28, 384).permute(0, 3, 1, 2)  # [1, 384, 28, 28]
+    tgt_grid = F.interpolate(
+        src_grid, size=(32, 32), mode="bicubic", align_corners=False
+    )  # [1, 384, 32, 32]
+    tgt_patch_pos = tgt_grid.permute(0, 2, 3, 1).reshape(1, 1024, 384)
+
+    # Our pos_embed is [1, 1028, 384] = [1, reg_slots(4) + patch_slots(1024), 384].
+    # Overwrite the patch slots; leave the first 4 register slots at their
+    # existing timm default init.
+    cur_pos = target_sd["pos_embed"].clone()
+    if cur_pos.shape != (1, 1028, 384):
+        raise RuntimeError(
+            f"unexpected target pos_embed shape {tuple(cur_pos.shape)}, "
+            f"expected (1, 1028, 384). timm layout may have changed."
+        )
+    cur_pos[:, 4:, :] = tgt_patch_pos
+    target_sd["pos_embed"] = cur_pos
+
+    # ── 3. Transformer blocks + final norm (copy verbatim) ──────────────
+    copied = 0
+    skipped_shape = []
+    for k, v in src.items():
+        if k in ("patch_embed.proj.weight", "patch_embed.proj.bias", "pos_embed"):
+            continue  # already handled
+        if k in ("cls_token",):
+            continue  # DINO has it, we don't
+        if k in target_sd:
+            if target_sd[k].shape == v.shape:
+                target_sd[k] = v.clone()
+                copied += 1
+            else:
+                skipped_shape.append((k, tuple(v.shape), tuple(target_sd[k].shape)))
+
+    # Load the merged state dict. strict=False permits our `reg_token` (not
+    # in DINO) and any other register-related keys to stay at default init.
+    missing, unexpected = model.vit.load_state_dict(target_sd, strict=False)
+
+    # Log a summary so the training log shows exactly what happened.
+    import logging
+    log = logging.getLogger(__name__)
+    log.info(
+        "DINO init: copied %d block tensors, adapted stem (3→5ch) and "
+        "pos_embed (28×28→32×32). missing=%d unexpected=%d skipped_shape=%d",
+        copied, len(missing), len(unexpected), len(skipped_shape),
+    )
+    if skipped_shape:
+        log.warning("DINO init: shape-mismatched tensors skipped: %s", skipped_shape)
+
+
+def build_encoder(
+    kind: EncoderKind,
+    *,
+    img_size: int = 128,
+    pretrained: bool = False,
+) -> nn.Module:
     """Instantiate an encoder by its registered kind string.
 
     Kept as a tiny factory rather than a dict so callers get a real function
     signature and type checking, and so checkpoint round-trips work: train
-    stores ``cfg.encoder_kind``, inference reads it back and calls this.
+    stores ``cfg.encoder_kind`` + ``cfg.img_size``, inference reads them back
+    and calls this.
+
+    Args:
+        kind: Encoder family ("resnet18", "vit_tiny_patch8", "vit_small_patch8").
+        img_size: Input spatial size. ResNet-18 ignores this (fixed 4×4 grid at
+            128 input); ViT variants scale their patch-token grid as
+            ``img_size // patch_size`` so 256 input gives a 32×32 grid.
+        pretrained: If True and kind=="vit_small_patch8", initialize from
+            DINO's ImageNet weights via ``load_dino_weights_into_vit_small_patch8``.
+            Only supported for the Small variant (DINO didn't publish patch-8
+            Tiny weights).
     """
     if kind == "resnet18":
+        if pretrained:
+            raise ValueError("pretrained=True is only supported for vit_small_patch8")
         return FiveChannelResNet18(in_channels=5)
     if kind == "vit_tiny_patch8":
-        return FiveChannelViTPatch8(variant="tiny")
+        if pretrained:
+            raise ValueError("pretrained=True is only supported for vit_small_patch8")
+        return FiveChannelViTPatch8(variant="tiny", img_size=img_size)
     if kind == "vit_small_patch8":
-        return FiveChannelViTPatch8(variant="small")
+        model = FiveChannelViTPatch8(variant="small", img_size=img_size)
+        if pretrained:
+            load_dino_weights_into_vit_small_patch8(model)
+        return model
     raise ValueError(
         f"unknown encoder_kind {kind!r}; expected one of {ENCODER_KINDS}"
     )
@@ -172,4 +312,5 @@ __all__ = [
     "FiveChannelResNet18",
     "FiveChannelViTPatch8",
     "build_encoder",
+    "load_dino_weights_into_vit_small_patch8",
 ]

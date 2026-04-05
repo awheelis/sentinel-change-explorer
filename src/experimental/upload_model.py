@@ -146,12 +146,14 @@ def render_model_card(
     from src.experimental.train_lejepa import checkpoint_filename
 
     encoder_kind = cfg.get("encoder_kind", "resnet18")
+    img_size = cfg.get("img_size", 128)
     arch = _ARCH_METADATA.get(encoder_kind, _ARCH_METADATA["resnet18"])
-    enc_probe = build_encoder(encoder_kind)
+    # pretrained=False: only probing for shapes/param counts, no weights loaded.
+    enc_probe = build_encoder(encoder_kind, img_size=img_size, pretrained=False)
     embed_dim = enc_probe.embed_dim
     grid_side = enc_probe.grid_side
     encoder_params_m = sum(p.numel() for p in enc_probe.parameters()) / 1e6
-    hub_filename = checkpoint_filename(encoder_kind)
+    hub_filename = checkpoint_filename(encoder_kind, img_size)
 
     template = _MODEL_CARD_TEMPLATE_PATH.read_text()
     return template.format(
@@ -221,8 +223,10 @@ def upload(
     # published PoC model.
     from src.experimental.train_lejepa import checkpoint_filename
 
-    encoder_kind = ckpt.get("config", {}).get("encoder_kind", "resnet18")
-    hub_filename = checkpoint_filename(encoder_kind)
+    ckpt_cfg = ckpt.get("config", {})
+    encoder_kind = ckpt_cfg.get("encoder_kind", "resnet18")
+    img_size = ckpt_cfg.get("img_size", 128)
+    hub_filename = checkpoint_filename(encoder_kind, img_size)
 
     logger.info("Rendering model card …")
     card_md = render_model_card(

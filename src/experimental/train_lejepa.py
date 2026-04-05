@@ -93,6 +93,8 @@ class TrainConfig:
     dataset: str = "cache/lejepa_dataset"      # local path or HF repo id
     output_dir: Path = Path("checkpoints")
     encoder_kind: EncoderKind = "vit_tiny_patch8"  # default to the gold viz path
+    img_size: int = 128                        # input spatial size; ViT grid = img_size // 8
+    pretrained: bool = False                   # DINO init (ViT-Small/8 only)
     epochs: int = 50
     batch_size: int = 128
     lr: float = 1e-3
@@ -131,9 +133,17 @@ def default_mask_schedule(n_positions: int) -> tuple[int, int]:
     return n_context, n_target
 
 
-def checkpoint_filename(encoder_kind: EncoderKind) -> str:
-    """Canonical checkpoint filename for a given encoder kind."""
-    return f"lejepa_{encoder_kind}_5band.pt"
+def checkpoint_filename(encoder_kind: EncoderKind, img_size: int = 128) -> str:
+    """Canonical checkpoint filename for a given encoder kind + input size.
+
+    The 128-input path keeps the historical filename for backward compatibility
+    with already-published checkpoints. Non-128 inputs embed the size so Small
+    @ 128 and Small @ 256 checkpoints can coexist on the hub and in the
+    local `checkpoints/` dir.
+    """
+    if img_size == 128:
+        return f"lejepa_{encoder_kind}_5band.pt"
+    return f"lejepa_{encoder_kind}_{img_size}_5band.pt"
 
 
 def pick_device() -> torch.device:
@@ -347,8 +357,15 @@ def train(cfg: TrainConfig) -> Path:
             f"Lower --batch-size or supply a larger dataset."
         )
 
-    online = build_encoder(cfg.encoder_kind).to(device)
-    target_enc = build_encoder(cfg.encoder_kind).to(device)
+    online = build_encoder(
+        cfg.encoder_kind, img_size=cfg.img_size, pretrained=cfg.pretrained
+    ).to(device)
+    # Target encoder starts as a copy of online — pretrained=False here because
+    # load_state_dict immediately overwrites with online's weights anyway, and
+    # we don't want to download DINO twice.
+    target_enc = build_encoder(
+        cfg.encoder_kind, img_size=cfg.img_size, pretrained=False
+    ).to(device)
     target_enc.load_state_dict(online.state_dict())
     for p in target_enc.parameters():
         p.requires_grad_(False)
@@ -481,11 +498,11 @@ def train(cfg: TrainConfig) -> Path:
             step += 1
 
         if (epoch + 1) % cfg.checkpoint_every == 0 or epoch == cfg.epochs - 1:
-            stem = checkpoint_filename(cfg.encoder_kind).removesuffix(".pt")
+            stem = checkpoint_filename(cfg.encoder_kind, cfg.img_size).removesuffix(".pt")
             ckpt_path = cfg.output_dir / f"{stem}_e{epoch+1:03d}.pt"
             save_checkpoint(ckpt_path, online, cfg, stats, loss_history)
 
-    final_path = cfg.output_dir / checkpoint_filename(cfg.encoder_kind)
+    final_path = cfg.output_dir / checkpoint_filename(cfg.encoder_kind, cfg.img_size)
     save_checkpoint(final_path, online, cfg, stats, loss_history)
 
     if wandb_run is not None:
@@ -556,8 +573,11 @@ def analyze(checkpoint_path: str, dataset_arg: str, k: int = 10) -> dict[str, An
     cluster holds >90% that's a collapse signal."""
     device = pick_device()
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    encoder_kind = ckpt.get("config", {}).get("encoder_kind", "resnet18")
-    enc = build_encoder(encoder_kind).to(device)
+    ckpt_cfg = ckpt.get("config", {})
+    encoder_kind = ckpt_cfg.get("encoder_kind", "resnet18")
+    img_size = ckpt_cfg.get("img_size", 128)
+    # pretrained=False: we're loading trained weights, not re-downloading DINO
+    enc = build_encoder(encoder_kind, img_size=img_size, pretrained=False).to(device)
     enc.load_state_dict(ckpt["encoder_state"])
     enc.eval()
 
@@ -600,6 +620,22 @@ def _cli() -> None:
             "Encoder backbone. vit_tiny_patch8 (default) → 16×16 feature "
             "grid with registers, M1-trainable. vit_small_patch8 → same "
             "but GPU-only. resnet18 → legacy 4×4 grid."
+        ),
+    )
+    parser.add_argument(
+        "--img-size", type=int, default=128,
+        help=(
+            "Input spatial size in pixels. ViT grid scales as img_size // 8 "
+            "(128 → 16×16, 256 → 32×32). ResNet-18 ignores this."
+        ),
+    )
+    parser.add_argument(
+        "--pretrained", action="store_true",
+        help=(
+            "Initialize ViT-Small/8 from DINO's ImageNet weights "
+            "(timm: vit_small_patch8_224.dino), with RGB→5band stem adaptation "
+            "and 28×28→grid pos_embed interpolation. Only valid for "
+            "--encoder vit_small_patch8."
         ),
     )
     parser.add_argument("--epochs", type=int, default=50)
@@ -645,6 +681,8 @@ def _cli() -> None:
         dataset=args.dataset,
         output_dir=args.output_dir,
         encoder_kind=args.encoder,
+        img_size=args.img_size,
+        pretrained=args.pretrained,
         epochs=1 if args.smoke_test else args.epochs,
         batch_size=4 if args.smoke_test else args.batch_size,
         lr=args.lr,

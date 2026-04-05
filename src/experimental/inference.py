@@ -35,9 +35,10 @@ logger = logging.getLogger(__name__)
 #: ordering in ``build_dataset.REFLECTANCE_BANDS``.
 _REFLECTANCE_BANDS: tuple[str, ...] = ("red", "green", "blue", "nir", "swir16")
 
-#: Model-input spatial dimensions. The encoder was trained at exactly this
-#: size and emits a 4x4 feature grid at this resolution.
-_CHIP_SIZE: int = 128
+#: Fallback model-input spatial dimensions for checkpoints that predate the
+#: ``config.img_size`` field. New checkpoints carry their own input size in
+#: their config dict and override this.
+_DEFAULT_CHIP_SIZE: int = 128
 
 
 # ── Model loading ────────────────────────────────────────────────────────────
@@ -93,11 +94,15 @@ def load_model_cached(
     logger.info("Loading LeJEPA encoder from %s", ckpt_path)
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
-    # Encoder kind lives in the checkpoint's config. Old ResNet-only PoC
-    # checkpoints don't have this key, so we fall back to "resnet18" for
-    # compatibility.
-    kind = ckpt.get("config", {}).get("encoder_kind", "resnet18")
-    encoder = build_encoder(kind)
+    # Encoder kind + input size live in the checkpoint's config. Old
+    # ResNet-only PoC checkpoints don't have these keys, so we fall back to
+    # "resnet18" / 128 for compatibility.
+    ckpt_cfg = ckpt.get("config", {})
+    kind = ckpt_cfg.get("encoder_kind", "resnet18")
+    chip_size = ckpt_cfg.get("img_size", _DEFAULT_CHIP_SIZE)
+    # pretrained=False: we're about to load the trained weights from the
+    # checkpoint, no need to re-download DINO.
+    encoder = build_encoder(kind, img_size=chip_size, pretrained=False)
     encoder.load_state_dict(ckpt["encoder_state"])
     encoder.eval()
 
@@ -111,6 +116,7 @@ def load_model_cached(
         "mean": mean,
         "std": std,
         "kind": kind,
+        "chip_size": chip_size,
         "source": source,
     }
 
@@ -136,7 +142,7 @@ def _stack_bands(bands_dict: dict[str, np.ndarray]) -> np.ndarray:
     return stacked  # [5, H, W]
 
 
-def _center_crop_or_pad(x: np.ndarray, size: int = _CHIP_SIZE) -> np.ndarray:
+def _center_crop_or_pad(x: np.ndarray, size: int = _DEFAULT_CHIP_SIZE) -> np.ndarray:
     """Force a ``[5, H, W]`` stack to ``[5, size, size]`` via center crop or
     symmetric reflect padding.
 
@@ -181,9 +187,10 @@ def extract_features(
     """
     import torch
 
-    stacked = _stack_bands(bands_dict)                 # [5, H, W]
-    stacked = _center_crop_or_pad(stacked, _CHIP_SIZE) # [5, 128, 128]
-    x = torch.from_numpy(stacked).unsqueeze(0)         # [1, 5, 128, 128]
+    chip_size = model.get("chip_size", _DEFAULT_CHIP_SIZE)
+    stacked = _stack_bands(bands_dict)                     # [5, H, W]
+    stacked = _center_crop_or_pad(stacked, chip_size)      # [5, chip, chip]
+    x = torch.from_numpy(stacked).unsqueeze(0)             # [1, 5, chip, chip]
     x = (x - model["mean"]) / model["std"]
     with torch.no_grad():
         feat = model["encoder"](x)                     # [1, C, H, W]
@@ -279,9 +286,10 @@ DEFAULT_HUB_FILENAME = "lejepa_vit_tiny_patch8_5band.pt"
 #: (gold first) so a fresh ViT run transparently overrides a stale ResNet
 #: checkpoint sitting next to it.
 _LOCAL_CANDIDATES: tuple[str, ...] = (
-    "checkpoints/lejepa_vit_small_patch8_5band.pt",   # future GPU upgrade
-    "checkpoints/lejepa_vit_tiny_patch8_5band.pt",    # M1 PoC default
-    "checkpoints/lejepa_resnet18_5band.pt",           # legacy
+    "checkpoints/lejepa_vit_small_patch8_256_5band.pt",   # DINO-init gold @ 256
+    "checkpoints/lejepa_vit_small_patch8_5band.pt",       # Small @ 128
+    "checkpoints/lejepa_vit_tiny_patch8_5band.pt",        # Tiny @ 128 (M1 PoC)
+    "checkpoints/lejepa_resnet18_5band.pt",               # legacy
 )
 
 

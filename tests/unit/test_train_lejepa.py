@@ -202,6 +202,43 @@ def test_vit_tiny_feature_grid_is_16x16():
     assert enc.grid_side == 16
 
 
+@pytest.mark.slow
+def test_dino_pretrained_init_adapts_stem_and_pos_embed():
+    """ViT-Small/8 with pretrained=True loads DINO ImageNet weights, adapts
+    the 3→5 channel stem via RGB-mean for NIR/SWIR, and interpolates the
+    28×28 DINO pos_embed to the target grid. Downloads DINO weights on first
+    run (~80MB, cached by timm).
+    """
+    from src.experimental.encoders import build_encoder
+
+    fresh = build_encoder("vit_small_patch8", img_size=256, pretrained=False)
+    loaded = build_encoder("vit_small_patch8", img_size=256, pretrained=True)
+
+    w_fresh = fresh.vit.patch_embed.proj.weight
+    w_loaded = loaded.vit.patch_embed.proj.weight
+    assert w_fresh.shape == w_loaded.shape == (384, 5, 8, 8)
+    # Different init → weights genuinely differ (DINO weights are non-trivial)
+    assert not torch.allclose(w_fresh, w_loaded)
+    # 5-band stem: NIR (ch 3) and SWIR16 (ch 4) are mean-of-RGB across input-dim
+    rgb_mean = w_loaded[:, :3, :, :].mean(dim=1, keepdim=True)
+    assert torch.allclose(w_loaded[:, 3:4, :, :], rgb_mean, atol=1e-6)
+    assert torch.allclose(w_loaded[:, 4:5, :, :], rgb_mean, atol=1e-6)
+
+    # Forward pass must still work (pos_embed interpolation didn't break shapes)
+    y = loaded(torch.zeros(1, 5, 256, 256))
+    assert y.shape == (1, 384, 32, 32)
+
+
+def test_dino_pretrained_init_rejected_for_wrong_encoder():
+    """DINO weights only exist for ViT-Small/8 — factory should refuse
+    pretrained=True for other kinds with a clear error."""
+    from src.experimental.encoders import build_encoder
+    with pytest.raises(ValueError, match="vit_small_patch8"):
+        build_encoder("vit_tiny_patch8", pretrained=True)
+    with pytest.raises(ValueError, match="vit_small_patch8"):
+        build_encoder("resnet18", pretrained=True)
+
+
 def test_vit_register_tokens_stripped_before_reshape():
     """Forward must drop the 4 register tokens before reshaping to NCHW —
     otherwise the grid would be 260 tokens and the reshape would fail."""
@@ -235,6 +272,29 @@ def test_checkpoint_filename_roundtrip():
     assert (
         checkpoint_filename("vit_tiny_patch8") == "lejepa_vit_tiny_patch8_5band.pt"
     )
+
+
+def test_checkpoint_filename_embeds_img_size_when_not_128():
+    # 128 stays backwards-compatible with already-published filenames
+    assert (
+        checkpoint_filename("vit_small_patch8", img_size=128)
+        == "lejepa_vit_small_patch8_5band.pt"
+    )
+    # Non-128 embeds the size so Small @ 128 and Small @ 256 don't collide
+    assert (
+        checkpoint_filename("vit_small_patch8", img_size=256)
+        == "lejepa_vit_small_patch8_256_5band.pt"
+    )
+
+
+@pytest.mark.parametrize("img_size,grid", [(128, 16), (256, 32)])
+def test_vit_tiny_feature_grid_scales_with_img_size(img_size, grid):
+    """Patch-token grid must track img_size // 8 for both 128 and 256 inputs
+    so the DINOv2-sharp path (32×32 grid) is exercised in CI."""
+    enc = FiveChannelViTPatch8(variant="tiny", img_size=img_size)
+    y = enc(torch.zeros(1, 5, img_size, img_size))
+    assert y.shape == (1, 192, grid, grid)
+    assert enc.grid_side == grid
 
 
 # ── ViT end-to-end shape flow (mirrors the training inner loop) ──────────────
