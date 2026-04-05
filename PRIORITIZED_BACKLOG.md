@@ -112,9 +112,9 @@ I DON'T WANT THIS FEATURE
 
 **Status (2026-04-04):** Phases 1-6 implemented behind the `experimental`
 extras. Dataset published at
-[alexw0/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/alexw0/sentinel2-lejepa-preset-biased-small),
+[falafel-hockey/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-preset-biased-small),
 small PoC model trained on M1 CPU and published to
-[alexw0/lejepa-resnet18-sentinel2-5band](https://huggingface.co/alexw0/lejepa-resnet18-sentinel2-5band),
+[falafel-hockey/lejepa-resnet18-sentinel2-5band](https://huggingface.co/falafel-hockey/lejepa-resnet18-sentinel2-5band),
 inference panel wired into the Streamlit app. Remaining: full GPU training run
 on lightning.ai to replace the PoC weights. See `src/experimental/README.md`.
 

@@ -70,7 +70,7 @@
 3. Also read `img_size` and pass it into `build_encoder(kind, img_size=chip_size)` so old Tiny @ 128 checkpoints still load unchanged.
 4. `extract_features` uses `model["chip_size"]` instead of `_CHIP_SIZE` when calling `_center_crop_or_pad`.
 5. Add the new checkpoint to `_LOCAL_CANDIDATES` in priority order: `checkpoints/lejepa_vit_small_patch8_256_5band.pt` (new top), keep the existing entries below.
-6. `DEFAULT_REPO_ID` stays — we'll publish the new model to a *different* repo id (`alexw0/lejepa-vit-small-patch8-256-sentinel2-5band`), which the hub-fallback branch will pick up via a new env var or default change. Actually — simpler: leave the default Tiny, add a second sidebar toggle later if we want hub A/B. For this PoC run, local checkpoint takes precedence so the app automatically prefers the new one after the upload syncs to the dev machine.
+6. `DEFAULT_REPO_ID` stays — we'll publish the new model to a *different* repo id (`falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band`), which the hub-fallback branch will pick up via a new env var or default change. Actually — simpler: leave the default Tiny, add a second sidebar toggle later if we want hub A/B. For this PoC run, local checkpoint takes precedence so the app automatically prefers the new one after the upload syncs to the dev machine.
 
 ### `src/experimental/build_dataset.py` — Phase 2a
 
@@ -177,7 +177,7 @@ Callers pass `img_size=cfg.img_size` where relevant (epoch checkpoints + final s
 
 **Phase 2 (M1, ~30-60 min mostly I/O):**
 1. Implement `build_global_dataset` + CLI flag.
-2. Run: `uv run python -m src.experimental.build_dataset --global-diverse --chip-size 256 --target-chips 5000 --output cache/lejepa_dataset_global_256 --push-to-hub alexw0/sentinel2-lejepa-global-diverse-256`.
+2. Run: `uv run python -m src.experimental.build_dataset --global-diverse --chip-size 256 --target-chips 5000 --output cache/lejepa_dataset_global_256 --push-to-hub falafel-hockey/sentinel2-lejepa-global-diverse-256`.
 3. Spot-check: plot 10 random chips as RGB, verify global diversity.
 4. Commit.
 
@@ -190,8 +190,8 @@ IMG_SIZE=256 \
 PRETRAINED=1 \
 BATCH_SIZE=192 \
 EPOCHS=150 \
-DATASET_REPO=alexw0/sentinel2-lejepa-global-diverse-256 \
-MODEL_REPO_ID=alexw0/lejepa-vit-small-patch8-256-sentinel2-5band \
+DATASET_REPO=falafel-hockey/sentinel2-lejepa-global-diverse-256 \
+MODEL_REPO_ID=falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band \
 WANDB_RUN_NAME=h100-dino-init-global-256 \
 bash src/experimental/lightning_train.sh
 ```

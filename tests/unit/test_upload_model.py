@@ -36,14 +36,14 @@ def _fake_checkpoint() -> dict:
 
 def test_render_model_card_substitutes_all_placeholders():
     card = render_model_card(
-        repo_id="alexw0/lejepa-resnet18-sentinel2-5band",
-        dataset_repo_id="alexw0/sentinel2-lejepa-preset-biased-small",
+        repo_id="falafel-hockey/lejepa-resnet18-sentinel2-5band",
+        dataset_repo_id="falafel-hockey/sentinel2-lejepa-preset-biased-small",
         checkpoint=_fake_checkpoint(),
         build_date="2026-04-04",
     )
     # Dynamic substitutions
-    assert "alexw0/lejepa-resnet18-sentinel2-5band" in card
-    assert "alexw0/sentinel2-lejepa-preset-biased-small" in card
+    assert "falafel-hockey/lejepa-resnet18-sentinel2-5band" in card
+    assert "falafel-hockey/sentinel2-lejepa-preset-biased-small" in card
     assert "2026-04-04" in card
     assert "1500.00" in card         # norm stats mean
     assert "600.00" in card          # norm stats std

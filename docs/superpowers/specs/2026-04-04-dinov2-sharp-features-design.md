@@ -3,7 +3,7 @@
 **Status:** Design. Not yet implemented.
 **Author:** Alex + Claude
 **Date:** 2026-04-04
-**Prerequisite:** `feat/lejepa-experimental` branch (ViT-Tiny/8, 128×128, 1200 steps) already published at `alexw0/lejepa-vit-tiny-patch8-sentinel2-5band`.
+**Prerequisite:** `feat/lejepa-experimental` branch (ViT-Tiny/8, 128×128, 1200 steps) already published at `falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band`.
 
 ---
 
@@ -98,7 +98,7 @@ This is where the "1–2 hours" estimate I gave earlier was wrong. The code chan
   - Lower the stride below tile size (overlapping chips — dilutes the "independent samples" assumption SIGReg depends on).
   - Accept fewer total chips and lean on more epochs instead (probably fine; 50 epochs × 1600 chips is still 80k forward passes).
 - **Global chips at 2 km bboxes don't fit a 256-px tile.** The hand-curated global-diversity points in the current builder use ~2 km boxes, which at 10 m/px is ~200 px — smaller than one 256 chip. Either expand all global bboxes to ≥3 km, or drop the global chips entirely for the 256 run and accept pure preset-biased training.
-- **Republish as a new HF dataset.** `alexw0/sentinel2-lejepa-preset-biased-small-256` (or similar). The existing 128 dataset stays published for reproducibility of the current ViT-Tiny checkpoint.
+- **Republish as a new HF dataset.** `falafel-hockey/sentinel2-lejepa-preset-biased-small-256` (or similar). The existing 128 dataset stays published for reproducibility of the current ViT-Tiny checkpoint.
 - **Re-run norm stats computation.** Per-band mean/std are pixel-level statistics, so they should be numerically very close to the current values — but recomputing them on the new chip set is the honest path, and the values get baked into the new checkpoint anyway.
 
 ### 5. Unit tests — `tests/unit/test_train_lejepa.py`, `tests/unit/test_inference.py`

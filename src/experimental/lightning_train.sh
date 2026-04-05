@@ -20,8 +20,8 @@
 # tuned to fit in ~1 hour of H100 time:
 #   ENCODER=vit_small_patch8 IMG_SIZE=256 PRETRAINED=1 \
 #     BATCH_SIZE=192 EPOCHS=150 \
-#     DATASET_REPO=alexw0/sentinel2-lejepa-global-diverse-256 \
-#     MODEL_REPO_ID=alexw0/lejepa-vit-small-patch8-256-sentinel2-5band \
+#     DATASET_REPO=falafel-hockey/sentinel2-lejepa-global-diverse-256 \
+#     MODEL_REPO_ID=falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band \
 #     WANDB_RUN_NAME=h100-dino-init-global-256 \
 #     bash src/experimental/lightning_train.sh
 #
@@ -38,10 +38,10 @@ EPOCHS="${EPOCHS:-50}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
 
-DATASET_REPO="${DATASET_REPO:-alexw0/sentinel2-lejepa-preset-biased-small}"
+DATASET_REPO="${DATASET_REPO:-falafel-hockey/sentinel2-lejepa-preset-biased-small}"
 DATASET_DIR="${DATASET_DIR:-cache/lejepa_dataset}"
 
-MODEL_REPO_ID="${MODEL_REPO_ID:-alexw0/lejepa-vit-tiny-patch8-sentinel2-5band}"
+MODEL_REPO_ID="${MODEL_REPO_ID:-falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band}"
 MODEL_PRIVATE="${MODEL_PRIVATE:-0}"  # set to 1 to publish as a private repo
 
 WANDB_PROJECT="${WANDB_PROJECT:-sentinel-change-lejepa}"
@@ -79,9 +79,27 @@ uv run python -c "import torch; assert torch.cuda.is_available(), 'no CUDA devic
 echo "==> Pulling dataset from HF Hub → ${DATASET_DIR}"
 uv run python - <<PY
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+import pathlib, shutil
+
 dd = load_dataset("${DATASET_REPO}")
 dd.save_to_disk("${DATASET_DIR}")
 print("saved:", dd)
+
+# Pull the sidecar norm_stats.json that push_dataset_to_hub uploads alongside
+# the parquet shards. load_dataset() only surfaces the dataset splits, so we
+# fetch this separately via hf_hub_download. Datasets that predate the
+# sidecar upload will 404 here; the fallback block below handles that.
+try:
+    stats_path = hf_hub_download(
+        repo_id="${DATASET_REPO}",
+        filename="norm_stats.json",
+        repo_type="dataset",
+    )
+    shutil.copy(stats_path, pathlib.Path("${DATASET_DIR}") / "norm_stats.json")
+    print(f"pulled norm_stats.json from hub → ${DATASET_DIR}/norm_stats.json")
+except Exception as e:
+    print(f"(no sidecar norm_stats.json on hub: {e}) — will fall back")
 PY
 
 echo "==> Verifying norm_stats.json is present in dataset dir"

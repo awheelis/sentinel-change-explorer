@@ -733,6 +733,7 @@ def push_dataset_to_hub(
     repo_id: str,
     card_markdown: str,
     private: bool = False,
+    norm_stats: dict[str, Any] | None = None,
 ) -> str:
     """Push the DatasetDict to the HuggingFace Hub with a dataset card.
 
@@ -767,6 +768,20 @@ def push_dataset_to_hub(
         repo_type="dataset",
         commit_message="Add dataset card",
     )
+
+    # Ship norm_stats.json as a sidecar file so downstream training can
+    # fetch it via huggingface_hub.hf_hub_download without recomputing from
+    # scratch. load_dataset() returns only the parquet shards, not arbitrary
+    # repo files, so this sidecar is the cleanest way to round-trip stats.
+    if norm_stats is not None:
+        logger.info("Uploading norm_stats.json …")
+        api.upload_file(
+            path_or_fileobj=json.dumps(norm_stats, indent=2).encode("utf-8"),
+            path_in_repo="norm_stats.json",
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message="Add norm stats",
+        )
 
     url = f"https://huggingface.co/datasets/{repo_id}"
     logger.info("Dataset published: %s", url)
@@ -867,6 +882,7 @@ def run_build(
             repo_id=push_to_hub,
             card_markdown=card_md,
             private=private,
+            norm_stats=stats,
         )
         logger.info("Published to: %s", url)
 
@@ -915,22 +931,42 @@ def run_global_build(
         "Global-diverse build: max_chips=%d chip_size=%d aoi_km=%.1f",
         max_chips, chip_size, aoi_size_km,
     )
-    chips: list[dict[str, Any]] = []
-    for chip in collect_global_chips(
-        max_chips=max_chips, chip_size=chip_size, aoi_size_km=aoi_size_km
-    ):
-        chips.append(chip)
-        if len(chips) % 100 == 0:
-            logger.info("  progress: %d / %d", len(chips), max_chips)
-    logger.info("Collected %d global chips", len(chips))
 
-    if not chips:
+    # Stream chips straight into an Arrow file via Dataset.from_generator so
+    # the whole list never sits in RAM at once. Holding 5000 × 5 × 256 × 256
+    # uint16 chips in a Python list OOMs on 8GB machines; from_generator
+    # writes batches to a memory-mapped Arrow cache file, keeping peak RAM
+    # to roughly one writer batch plus the load_bands buffer for the
+    # current scene.
+    from datasets import Dataset
+
+    features = _build_features_spec(chip_size)
+    progress_counter = {"n": 0}
+
+    def _chip_generator() -> Iterator[dict[str, Any]]:
+        for chip in collect_global_chips(
+            max_chips=max_chips, chip_size=chip_size, aoi_size_km=aoi_size_km
+        ):
+            progress_counter["n"] += 1
+            if progress_counter["n"] % 100 == 0:
+                logger.info("  progress: %d / %d", progress_counter["n"], max_chips)
+            yield {
+                "bands": chip["bands"],
+                "bbox": list(chip["bbox"]),
+                "acquisition_date": chip["acquisition_date"],
+                "scene_id": chip["scene_id"],
+                "source": chip["source"],
+                "preset_name": chip["preset_name"] or "",
+            }
+
+    ds = Dataset.from_generator(_chip_generator, features=features)
+    logger.info("Collected %d global chips", len(ds))
+
+    if len(ds) == 0:
         raise RuntimeError(
             "No chips collected — STAC search or load_bands failed for every "
             "global point. Check network and STAC endpoint availability."
         )
-
-    ds = chips_to_dataset(chips, chip_size=chip_size)
     dd = split_train_val(ds, val_fraction=0.10, seed=seed)
     stats = compute_norm_stats(dd["train"])
     logger.info(
@@ -952,13 +988,14 @@ def run_global_build(
             repo_id=push_to_hub,
             presets=presets,
             n_preset_chips=0,
-            n_global_chips=len(chips),
+            n_global_chips=len(ds),
             train_size=len(dd["train"]),
             val_size=len(dd["validation"]),
             norm_stats=stats,
         )
         url = push_dataset_to_hub(
-            dd, repo_id=push_to_hub, card_markdown=card_md, private=private
+            dd, repo_id=push_to_hub, card_markdown=card_md, private=private,
+            norm_stats=stats,
         )
         logger.info("Published to: %s", url)
 

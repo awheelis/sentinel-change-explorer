@@ -13,7 +13,7 @@ the current ViT-Tiny/8, and any future encoder added to the factory.
 Usage:
     uv run python -m src.experimental.upload_model \\
         --checkpoint checkpoints/lejepa_vit_tiny_patch8_5band.pt \\
-        --repo-id alexw0/lejepa-vit-tiny-patch8-sentinel2-5band
+        --repo-id falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band
 
 Phase 5 of the experimental LeJEPA feature. The companion dataset publish
 lives in ``build_dataset.py``; inference that pulls the result of this
@@ -295,12 +295,12 @@ def _cli() -> None:
         "--repo-id", type=str, required=True,
         help=(
             "Target HF model repo (e.g. "
-            "'alexw0/lejepa-vit-tiny-patch8-sentinel2-5band')."
+            "'falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band')."
         ),
     )
     parser.add_argument(
         "--dataset-repo-id", type=str,
-        default="alexw0/sentinel2-lejepa-preset-biased-small",
+        default="falafel-hockey/sentinel2-lejepa-preset-biased-small",
         help="HF dataset repo id used during training (shown in the model card).",
     )
     parser.add_argument(
