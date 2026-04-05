@@ -108,7 +108,16 @@ I DON'T WANT THIS FEATURE
 
 ---
 
-### 8. Foundation Model Integration (Proof of Concept)
+### 8. Foundation Model Integration (Proof of Concept) — **IN PROGRESS**
+
+**Status (2026-04-04):** Phases 1-6 implemented behind the `experimental`
+extras. Dataset published at
+[alexw0/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/alexw0/sentinel2-lejepa-preset-biased-small),
+small PoC model trained on M1 CPU and published to
+[alexw0/lejepa-resnet18-sentinel2-5band](https://huggingface.co/alexw0/lejepa-resnet18-sentinel2-5band),
+inference panel wired into the Streamlit app. Remaining: full GPU training run
+on lightning.ai to replace the PoC weights. See `src/experimental/README.md`.
+
 ```
 INPUT FROM ALEX
 

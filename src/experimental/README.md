@@ -15,11 +15,15 @@ inference UI.
 
 ## Hardware notes
 
-| Stage                  | Where it runs      | Why                                   |
-|------------------------|--------------------|----------------------------------------|
-| Dataset build (Phase 2)| M1 Mac 8GB         | I/O-bound, reuses existing COG cache   |
-| Training (Phase 4)     | lightning.ai GPU   | MPS is too slow + flaky for JEPA ops   |
-| Inference (Phase 6)    | M1 Mac 8GB, CPU    | Single tile, ~20–50 ms, fits easily    |
+| Stage                  | Where it runs             | Why                                     |
+|------------------------|---------------------------|------------------------------------------|
+| Dataset build (Phase 2)| M1 Mac 8GB                | I/O-bound, reuses existing COG cache     |
+| Training (Phase 4)     | M1 CPU (small) / GPU (real)| CPU is fine for <1k chips smoke runs; real runs need CUDA. MPS is intentionally avoided |
+| Inference (Phase 6)    | M1 Mac 8GB, CPU           | Single tile, ~20-50 ms, fits easily      |
+
+The repo currently ships a small **proof-of-concept checkpoint** trained on
+M1 CPU for fast iteration. A real run on lightning.ai GPU is a planned
+follow-up that swaps the weights without any API changes.
 
 ## Install
 
@@ -51,15 +55,46 @@ After install, toggle the "Experimental: Foundation Model" checkbox in
 the app sidebar. If the extras aren't installed the panel shows an
 install hint instead of trying to import torch.
 
-## Reproduction steps (when phases land)
+## Reproduction steps
 
-1. **Build + publish dataset** (Phase 2–3):
-   `uv run python -m src.experimental.build_dataset --push-to-hub <user>/sentinel2-lejepa-preset-biased-small`
-2. **Train on lightning.ai** (Phase 4):
-   `python -m src.experimental.train_lejepa --dataset <user>/sentinel2-lejepa-preset-biased-small --epochs 50`
+1. **Build + publish dataset** (Phase 2-3):
+   ```bash
+   uv run python -m src.experimental.build_dataset \
+       --push-to-hub <user>/sentinel2-lejepa-preset-biased-small
+   ```
+   The published dataset for this repo lives at
+   [alexw0/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/alexw0/sentinel2-lejepa-preset-biased-small).
+
+2. **Train** (Phase 4). For a quick CPU-only sanity run:
+   ```bash
+   uv run python -m src.experimental.train_lejepa \
+       --dataset cache/lejepa_dataset \
+       --limit-train-chips 500 --batch-size 16 --epochs 15 \
+       --wandb-project sentinel-change-lejepa
+   ```
+   For the real run on lightning.ai (once wired to hub-dataset loading):
+   ```bash
+   python -m src.experimental.train_lejepa \
+       --dataset <user>/sentinel2-lejepa-preset-biased-small \
+       --epochs 50 --batch-size 128
+   ```
+
 3. **Publish model** (Phase 5):
-   `python -m src.experimental.train_lejepa --upload <user>/lejepa-resnet18-sentinel2-5band`
-4. **Run inference** (Phase 6): just open the app.
+   ```bash
+   uv run python -m src.experimental.upload_model \
+       --checkpoint checkpoints/lejepa_resnet18_5band.pt \
+       --repo-id <user>/lejepa-resnet18-sentinel2-5band
+   ```
+
+4. **Run inference** (Phase 6): open the app, toggle the sidebar checkbox.
+   The panel downloads the model from HF on first render and caches it with
+   `st.cache_resource`.
+
+### Training telemetry
+
+Pass `--wandb-project <name>` to stream per-step `loss/total`,
+`loss/predictive`, `loss/sigreg`, `lr`, and `ema_momentum` metrics to
+Weights & Biases. Authenticate once with `wandb login` before the first run.
 
 ## Status
 
