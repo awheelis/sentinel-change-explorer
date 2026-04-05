@@ -89,6 +89,11 @@ Consolidated from ISSUES.md, NEXT_FEATURES.md, and ENHANCEMENT_ROADMAP.md. Items
 
 ### 7. Anomaly Detection Layer
 
+```
+INPUT FROM ALEX: 
+I DON'T WANT THIS FEATURE
+```
+
 **Why (Dr. Reisman):** A pixel might show moderate NDVI decrease AND moderate NDBI increase — individually below threshold, but together indicating clear urbanization. Multi-index anomaly detection catches compound changes that single-index thresholding misses.
 
 **Implementation:**
@@ -108,6 +113,20 @@ Consolidated from ISSUES.md, NEXT_FEATURES.md, and ENHANCEMENT_ROADMAP.md. Items
 INPUT FROM ALEX
 
 What if we trained our own small LeJEPA model and used that. THe LeWM paper on had a model with only 15m parameters. Perhaps that wouldn't be hard to store / pull from hugging face or run???
+
+Possible implementation? 
+Start experimental LeJEPA (in experimental folder)
+- Download Sentinel data to make a small dataset
+- use stable pertaining repo to train a lejepa on data
+-- Model must be small enough to run on a M1 mac w 8 gb of ram. 
+-- push model to hugging face after training is done 
+- run LeJEPA on input data
+-- pull model from hugging face
+- create RGB image using 1, 2, 3rd principle components of features 
+- paste images side by side 
+- user sees "experimental" tab on app main screen. Note that required specs. add details on the LeJEPA experimental feature. 
+
+For context, look at LeJEPA and LeWorldModel papers
 ```
 **Why (Kevin):** "Every serious geospatial company is investing in foundation models and deep learning for change detection. Your approach is the methodology from 2010. Show me you know where the field is going — even a branch with a simple experiment — and the conversation changes significantly."
 

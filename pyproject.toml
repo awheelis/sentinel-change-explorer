@@ -16,6 +16,18 @@ dependencies = [
     "overturemaps>=0.7.0",
     "pyarrow>=15.0.0",
     "shapely>=2.0.3",
+    "watchdog>=6.0.0",
+    "huggingface-hub[cli]>=1.9.0",
+]
+
+[project.optional-dependencies]
+# Experimental LeJEPA foundation-model feature (see src/experimental/README.md).
+# Kept out of base deps so a plain `uv sync` stays lean for the Streamlit app.
+# Install with: uv sync --extra experimental
+experimental = [
+    "torch>=2.2",
+    "datasets>=2.19",
+    "timm>=1.0",
 ]
 
 [dependency-groups]

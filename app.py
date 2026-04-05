@@ -363,6 +363,14 @@ def main() -> None:
             key="show_classification",
             help="Multi-index classification overlay: urbanization, vegetation loss, flooding, recovery.",
         )
+        show_experimental = st.checkbox(
+            "Experimental: Foundation Model (PoC)",
+            value=False,
+            key="show_experimental",
+            help="Render a LeJEPA-pretrained ResNet-18 PCA->RGB feature view and a "
+                 "learned change heatmap. Requires the 'experimental' extra: "
+                 "`uv sync --extra experimental`.",
+        )
 
         run_button = st.button("Analyze Change", type="primary", width="stretch")
 
@@ -878,6 +886,23 @@ def main() -> None:
         st.markdown(f"{_RATING_ICONS[gap_rating]} **Time gap:** {gap_str}")
 
     st.pyplot(change_histogram(delta, threshold=THRESHOLD, index_name=INDEX_FUNCTIONS[index_choice][0]))
+
+    # ── Experimental: Foundation Model PoC ───────────────────────────────
+    if show_experimental:
+        from src.experimental import _has_torch
+        if _has_torch():
+            from src.experimental.inference import render_experimental_panel
+            render_experimental_panel(
+                before_bands=st.session_state["before_bands"],
+                after_bands=st.session_state["after_bands"],
+            )
+        else:
+            st.markdown("### Experimental: Foundation Model (PoC)")
+            st.info(
+                "The experimental extras aren't installed. Run:\n\n"
+                "```\nuv sync --extra experimental\n```\n\n"
+                "then reload the app. See `src/experimental/README.md` for details."
+            )
 
     # Read drawn geometry and update bbox session state
     if map_data and map_data.get("last_active_drawing"):
