@@ -16,7 +16,12 @@
       "Bash(export CLAUDE_TOOL_INPUT='{\"command\":\"rm -rf /\"}')",
       "Bash(bash /Users/alex_wheelis/Desktop/sentinel-change-explorer/.claude/hooks/guard.sh)",
       "Bash(echo \"Exit: $?\")",
-      "Bash(export CLAUDE_TOOL_INPUT='{\"command\":\"find / -name *.py -delete\"}')"
+      "Bash(export CLAUDE_TOOL_INPUT='{\"command\":\"find / -name *.py -delete\"}')",
+      "Bash(ls src/experimental/*.sh)",
+      "Bash(bash -n src/experimental/lightning_train.sh)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)"
     ]
   }
 }
