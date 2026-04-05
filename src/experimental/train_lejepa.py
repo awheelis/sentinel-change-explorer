@@ -1,37 +1,51 @@
-"""LeJEPA pretraining for a 5-channel ResNet-18 on Sentinel-2 chips.
+"""LeJEPA pretraining for 5-channel Sentinel-2 encoders.
 
 A minimal, single-file implementation of the LeJEPA objective (Balestriero &
-LeCun, 2025, arXiv:2511.08544) adapted for ResNet-18 and a small preset-biased
-dataset. The JEPA masking lives on the 4x4 feature grid (ResNet's stride-32
-output at 128x128 input) rather than at the image input, because conv
-backbones don't natively support patch dropping. We train the online encoder
+LeCun, 2025, arXiv:2511.08544) adapted for small preset-biased Sentinel-2
+datasets. The JEPA masking lives on the encoder's feature grid (not the
+image input) so the same training loop works for both conv backbones and
+ViTs without per-architecture masking plumbing. We train the online encoder
 to predict target-encoder features at masked grid positions from a pooled
 context representation, and regularize the full feature batch with SIGReg.
 
+Two encoder families are supported and selected by ``--encoder``:
+
+- ``vit_tiny_patch8`` (default). ViT-Tiny with patch size 8 and 4 register
+  tokens, producing a **16×16 = 256**-position feature grid. This is the
+  architecture that yields the DINOv2-style crisp PCA→RGB visualizations;
+  ~5.5M params, M1-trainable.
+- ``vit_small_patch8``: same recipe with ViT-Small dimensions, ~22M params,
+  GPU-only for real runs.
+- ``resnet18``: legacy 5-band ResNet-18, 4×4 grid (16 positions). Retained
+  for backward compatibility with the first PoC checkpoint; not recommended
+  for new runs because the coarse grid yields blurry visualizations.
+
 Design tradeoffs chosen deliberately:
 
-- Masking at the 4x4 feature grid rather than at the input. This is a
-  pragmatic adaptation for a conv backbone — a ViT-I-JEPA variant would mask
-  at the input. The self-supervised signal comes from the context-to-target
-  prediction asymmetry, which survives feature-level masking.
+- Masking at the feature grid rather than at the image input. For conv
+  backbones this is the only option; for ViTs it keeps the training loop
+  architecture-agnostic. The SSL signal comes from the context-to-target
+  prediction asymmetry, which survives feature-level masking either way.
 - Mean-pooled context. A single mean over visible positions replaces
-  I-JEPA's transformer-over-context, keeping the predictor tiny (~0.5M
-  params).
-- BF16 mixed precision on CUDA, FP32 on CPU. MPS is explicitly disabled —
-  some gather and autocast ops in this graph are flaky on Apple Silicon and
-  the speedup vs CPU at this scale isn't worth the debugging cost.
+  I-JEPA's transformer-over-context, keeping the predictor tiny.
+- BF16 mixed precision on CUDA, FP32 on CPU. MPS is explicitly avoided.
 
 Usage:
     # Smoke test on M1 CPU against a local dataset (~3 min)
     uv run python -m src.experimental.train_lejepa --smoke-test
 
-    # Real training run on lightning.ai GPU
+    # ViT-Tiny/8 training on M1 (PoC checkpoint)
     uv run python -m src.experimental.train_lejepa \\
-        --dataset cache/lejepa_dataset --epochs 50 --batch-size 128
+        --encoder vit_tiny_patch8 --epochs 15 \\
+        --limit-train-chips 500 --batch-size 16
+
+    # ViT-Small/8 training on lightning.ai GPU (gold)
+    uv run python -m src.experimental.train_lejepa \\
+        --encoder vit_small_patch8 --epochs 50 --batch-size 128
 
     # Feature-collapse sanity check after training
     uv run python -m src.experimental.train_lejepa \\
-        --analyze checkpoints/lejepa_resnet18_5band.pt
+        --analyze checkpoints/lejepa_vit_tiny_patch8_5band.pt
 """
 from __future__ import annotations
 
@@ -51,12 +65,18 @@ try:
     import torch.nn as nn
     import torch.nn.functional as F
     from torch.utils.data import DataLoader, Dataset, Subset
-    from torchvision.models import resnet18
 except ImportError as e:  # pragma: no cover - guarded by the extra
     raise ImportError(
         "train_lejepa requires the 'experimental' extras. "
         "Install with: uv sync --extra experimental"
     ) from e
+
+from src.experimental.encoders import (
+    ENCODER_KINDS,
+    EncoderKind,
+    FiveChannelResNet18,  # re-exported for test backcompat
+    build_encoder,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -72,14 +92,18 @@ class TrainConfig:
 
     dataset: str = "cache/lejepa_dataset"      # local path or HF repo id
     output_dir: Path = Path("checkpoints")
+    encoder_kind: EncoderKind = "vit_tiny_patch8"  # default to the gold viz path
     epochs: int = 50
     batch_size: int = 128
     lr: float = 1e-3
     weight_decay: float = 0.05
     alpha_sigreg: float = 1.0                  # SIGReg loss weight
     ema_base: float = 0.996                    # target-encoder momentum start
-    n_context: int = 7                         # visible positions out of 16
-    n_target: int = 4                          # predicted positions
+    # Context / target counts. None → auto-pick a sensible fraction of the
+    # encoder's grid (~62% visible, ~25% predicted). Override on the CLI only
+    # when you want to sweep the masking schedule.
+    n_context: int | None = None
+    n_target: int | None = None
     checkpoint_every: int = 10                 # epochs
     seed: int = 42
     num_workers: int = 2
@@ -89,6 +113,29 @@ class TrainConfig:
     wandb_run_name: str | None = None
 
 
+def default_mask_schedule(n_positions: int) -> tuple[int, int]:
+    """Pick (n_context, n_target) for a given feature-grid size.
+
+    Defaults to ~62% context / ~25% predicted, chosen empirically for I-JEPA-
+    style dense prediction: enough visible signal for the predictor to have a
+    chance, enough targets that the gradient signal isn't sparse.
+
+    For the 16-position ResNet grid this gives (10, 4); for the 256-position
+    ViT grid it gives (160, 64).
+    """
+    n_context = max(1, int(round(n_positions * 0.625)))
+    n_target = max(1, int(round(n_positions * 0.25)))
+    # Guarantee disjoint sets even in tiny-grid edge cases.
+    if n_context + n_target > n_positions:
+        n_target = max(1, n_positions - n_context)
+    return n_context, n_target
+
+
+def checkpoint_filename(encoder_kind: EncoderKind) -> str:
+    """Canonical checkpoint filename for a given encoder kind."""
+    return f"lejepa_{encoder_kind}_5band.pt"
+
+
 def pick_device() -> torch.device:
     """CUDA if available, else CPU. MPS is intentionally avoided."""
     if torch.cuda.is_available():
@@ -96,42 +143,16 @@ def pick_device() -> torch.device:
     return torch.device("cpu")
 
 
-# ── Model ────────────────────────────────────────────────────────────────────
-
-
-class FiveChannelResNet18(nn.Module):
-    """ResNet-18 with a 5-channel first conv, returning the pre-avgpool feature
-    map ``[B, 512, 4, 4]`` at 128x128 input. The original ``avgpool`` and
-    ``fc`` layers are dropped — JEPA pretraining operates on the spatial map
-    directly."""
-
-    def __init__(self, in_channels: int = 5) -> None:
-        super().__init__()
-        net = resnet18(weights=None)
-        net.conv1 = nn.Conv2d(
-            in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False
-        )
-        self.stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
-        self.layer1 = net.layer1
-        self.layer2 = net.layer2
-        self.layer3 = net.layer3
-        self.layer4 = net.layer4
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.stem(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x  # [B, 512, 4, 4]
+# ── Predictor ────────────────────────────────────────────────────────────────
 
 
 class Predictor(nn.Module):
     """Per-position predictor. Takes the pooled context embedding plus a
-    learnable target-position embedding (one row per flattened 4x4 cell) and
+    learnable target-position embedding (one row per flattened grid cell) and
     predicts the target-encoder embedding at that position.
 
-    Architecture: 2-layer MLP with GELU, ~0.5M params total.
+    Architecture: 2-layer MLP with GELU. Param count scales with ``dim`` (and
+    therefore with encoder choice).
     """
 
     def __init__(self, dim: int = 512, n_positions: int = 16) -> None:
@@ -326,12 +347,37 @@ def train(cfg: TrainConfig) -> Path:
             f"Lower --batch-size or supply a larger dataset."
         )
 
-    online = FiveChannelResNet18().to(device)
-    target_enc = FiveChannelResNet18().to(device)
+    online = build_encoder(cfg.encoder_kind).to(device)
+    target_enc = build_encoder(cfg.encoder_kind).to(device)
     target_enc.load_state_dict(online.state_dict())
     for p in target_enc.parameters():
         p.requires_grad_(False)
-    predictor = Predictor(dim=512, n_positions=16).to(device)
+
+    # Encoders expose these as attributes so downstream code stays shape-free.
+    dim = online.embed_dim
+    grid_side = online.grid_side
+    n_positions = grid_side * grid_side
+    predictor = Predictor(dim=dim, n_positions=n_positions).to(device)
+
+    # Resolve masking schedule now that we know the grid size.
+    if cfg.n_context is None or cfg.n_target is None:
+        auto_ctx, auto_tgt = default_mask_schedule(n_positions)
+        n_context = cfg.n_context if cfg.n_context is not None else auto_ctx
+        n_target = cfg.n_target if cfg.n_target is not None else auto_tgt
+    else:
+        n_context, n_target = cfg.n_context, cfg.n_target
+    if n_context + n_target > n_positions:
+        raise ValueError(
+            f"n_context ({n_context}) + n_target ({n_target}) exceeds "
+            f"encoder grid size ({n_positions})"
+        )
+    logger.info(
+        "Encoder: %s (dim=%d, grid=%dx%d, params=%.2fM). Masking: "
+        "n_context=%d n_target=%d",
+        cfg.encoder_kind, dim, grid_side, grid_side,
+        sum(p.numel() for p in online.parameters()) / 1e6,
+        n_context, n_target,
+    )
 
     params = list(online.parameters()) + list(predictor.parameters())
     optim = torch.optim.AdamW(params, lr=cfg.lr, weight_decay=cfg.weight_decay)
@@ -367,32 +413,34 @@ def train(cfg: TrainConfig) -> Path:
         for batch in loader:
             x = batch.to(device, non_blocking=True)
             B = x.shape[0]
-            ctx_idx, tgt_idx = sample_masks(B, cfg.n_context, cfg.n_target)
+            ctx_idx, tgt_idx = sample_masks(
+                B, n_context, n_target, n_positions=n_positions
+            )
             ctx_idx = ctx_idx.to(device)
             tgt_idx = tgt_idx.to(device)
 
             with torch.autocast(
                 device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16
             ):
-                feat = online(x)                                # [B, 512, 4, 4]
+                feat = online(x)                                # [B, D, H, W]
                 Bf, D, H, W = feat.shape
-                flat = feat.flatten(2).transpose(1, 2)          # [B, 16, 512]
+                flat = feat.flatten(2).transpose(1, 2)          # [B, HW, D]
 
                 ctx_embed = torch.gather(
                     flat, 1, ctx_idx.unsqueeze(-1).expand(-1, -1, D)
-                ).mean(dim=1)                                    # [B, 512]
+                ).mean(dim=1)                                    # [B, D]
 
                 with torch.no_grad():
                     tgt_feat = target_enc(x)
                     tgt_flat = tgt_feat.flatten(2).transpose(1, 2)
                     target_embed = torch.gather(
                         tgt_flat, 1, tgt_idx.unsqueeze(-1).expand(-1, -1, D)
-                    )                                            # [B, K, 512]
+                    )                                            # [B, K, D]
 
-                pred = predictor(ctx_embed, tgt_idx)             # [B, K, 512]
+                pred = predictor(ctx_embed, tgt_idx)             # [B, K, D]
                 l_pred = predictive_loss(pred, target_embed)
 
-                emb_for_reg = flat.reshape(-1, D).float()        # [B*16, 512]
+                emb_for_reg = flat.reshape(-1, D).float()        # [B*HW, D]
                 l_reg = sigreg_loss(emb_for_reg)
                 loss = l_pred + cfg.alpha_sigreg * l_reg
 
@@ -433,10 +481,11 @@ def train(cfg: TrainConfig) -> Path:
             step += 1
 
         if (epoch + 1) % cfg.checkpoint_every == 0 or epoch == cfg.epochs - 1:
-            ckpt_path = cfg.output_dir / f"lejepa_resnet18_5band_e{epoch+1:03d}.pt"
+            stem = checkpoint_filename(cfg.encoder_kind).removesuffix(".pt")
+            ckpt_path = cfg.output_dir / f"{stem}_e{epoch+1:03d}.pt"
             save_checkpoint(ckpt_path, online, cfg, stats, loss_history)
 
-    final_path = cfg.output_dir / "lejepa_resnet18_5band.pt"
+    final_path = cfg.output_dir / checkpoint_filename(cfg.encoder_kind)
     save_checkpoint(final_path, online, cfg, stats, loss_history)
 
     if wandb_run is not None:
@@ -507,7 +556,8 @@ def analyze(checkpoint_path: str, dataset_arg: str, k: int = 10) -> dict[str, An
     cluster holds >90% that's a collapse signal."""
     device = pick_device()
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    enc = FiveChannelResNet18().to(device)
+    encoder_kind = ckpt.get("config", {}).get("encoder_kind", "resnet18")
+    enc = build_encoder(encoder_kind).to(device)
     enc.load_state_dict(ckpt["encoder_state"])
     enc.eval()
 
@@ -541,6 +591,17 @@ def _cli() -> None:
     )
     parser.add_argument("--dataset", type=str, default="cache/lejepa_dataset")
     parser.add_argument("--output-dir", type=Path, default=Path("checkpoints"))
+    parser.add_argument(
+        "--encoder",
+        type=str,
+        default="vit_tiny_patch8",
+        choices=list(ENCODER_KINDS),
+        help=(
+            "Encoder backbone. vit_tiny_patch8 (default) → 16×16 feature "
+            "grid with registers, M1-trainable. vit_small_patch8 → same "
+            "but GPU-only. resnet18 → legacy 4×4 grid."
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -583,6 +644,7 @@ def _cli() -> None:
     cfg = TrainConfig(
         dataset=args.dataset,
         output_dir=args.output_dir,
+        encoder_kind=args.encoder,
         epochs=1 if args.smoke_test else args.epochs,
         batch_size=4 if args.smoke_test else args.batch_size,
         lr=args.lr,
@@ -614,4 +676,6 @@ __all__ = [
     "train",
     "save_checkpoint",
     "analyze",
+    "default_mask_schedule",
+    "checkpoint_filename",
 ]

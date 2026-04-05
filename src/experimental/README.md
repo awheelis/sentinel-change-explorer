@@ -1,17 +1,38 @@
 # Experimental: LeJEPA Foundation-Model Change Detection
 
 An honest, end-to-end proof-of-concept that applies a small self-supervised
-vision model (ResNet-18 pretrained with the
-[LeJEPA](https://arxiv.org/abs/2511.08544) objective) to the same Sentinel-2
-tiles the main app already loads. It produces PCA→RGB feature
+vision model (**ViT-Tiny patch 8 with register tokens**, pretrained with
+the [LeJEPA](https://arxiv.org/abs/2511.08544) objective) to the same
+Sentinel-2 tiles the main app already loads. It produces PCA→RGB feature
 visualizations and a learned per-patch change heatmap shown side-by-side
 with the existing NDVI-delta map.
 
-**This is a proof of concept, not a SOTA system.** The model is tiny
-(~11M params), the training set is tiny (~5k–8k chips biased toward the
-app's preset AOIs), and the main goal is to demonstrate the full pipeline:
-dataset curation → publishing → SSL pretraining → model publishing →
-inference UI.
+## Why ViT-Tiny/8 with register tokens
+
+Two design choices drive the quality of the PCA→RGB panel:
+
+1. **Dense feature grid.** A ViT with patch size 8 at 128×128 input gives a
+   **16×16 = 256-position** patch-token grid — 16× denser than the 4×4 grid
+   a stride-32 ResNet-18 would produce. The feature visualization's
+   apparent sharpness is essentially capped by this resolution, so this is
+   the single biggest win.
+2. **Register tokens** ([Darcet et al. 2024](https://arxiv.org/abs/2309.16588)).
+   Unregistered ViTs develop high-norm "artifact" tokens in low-information
+   regions that dominate PCA projections and produce ugly hot-spot noise.
+   4 register tokens soak up the artifacts, leaving the patch tokens clean
+   for visualization. This is the trick that takes the output from "coarse
+   watercolor" to "DINOv2-style feature map".
+
+The factory also exposes `vit_small_patch8` (GPU-only, 384-dim, ~22M
+params) for a future upgrade that swaps the weights without any API change,
+and `resnet18` (legacy, 11M params, 4×4 grid) for backward compatibility
+with the first PoC model.
+
+**This is a proof of concept, not a SOTA system.** The model is small
+(~5.5M params for ViT-Tiny), the training set is small (~3k–8k chips biased
+toward the app's preset AOIs), and the main goal is to demonstrate the full
+pipeline: dataset curation → publishing → SSL pretraining → model
+publishing → inference UI.
 
 ## Hardware notes
 
@@ -65,25 +86,34 @@ install hint instead of trying to import torch.
    The published dataset for this repo lives at
    [alexw0/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/alexw0/sentinel2-lejepa-preset-biased-small).
 
-2. **Train** (Phase 4). For a quick CPU-only sanity run:
+2. **Train** (Phase 4). ViT-Tiny/8 on M1 CPU (PoC, ~20 min on 500 chips):
    ```bash
    uv run python -m src.experimental.train_lejepa \
+       --encoder vit_tiny_patch8 \
        --dataset cache/lejepa_dataset \
        --limit-train-chips 500 --batch-size 16 --epochs 15 \
        --wandb-project sentinel-change-lejepa
    ```
-   For the real run on lightning.ai (once wired to hub-dataset loading):
+   ViT-Small/8 on lightning.ai GPU (gold upgrade):
    ```bash
    python -m src.experimental.train_lejepa \
+       --encoder vit_small_patch8 \
        --dataset <user>/sentinel2-lejepa-preset-biased-small \
        --epochs 50 --batch-size 128
    ```
+   Legacy ResNet-18 (kept for comparison only, not recommended):
+   ```bash
+   uv run python -m src.experimental.train_lejepa \
+       --encoder resnet18 --epochs 15 --limit-train-chips 500
+   ```
 
-3. **Publish model** (Phase 5):
+3. **Publish model** (Phase 5). The uploader auto-derives the hub filename
+   from the checkpoint's `encoder_kind`, so the same command works for any
+   architecture:
    ```bash
    uv run python -m src.experimental.upload_model \
-       --checkpoint checkpoints/lejepa_resnet18_5band.pt \
-       --repo-id <user>/lejepa-resnet18-sentinel2-5band
+       --checkpoint checkpoints/lejepa_vit_tiny_patch8_5band.pt \
+       --repo-id <user>/lejepa-vit-tiny-patch8-sentinel2-5band
    ```
 
 4. **Run inference** (Phase 6): open the app, toggle the sidebar checkbox.

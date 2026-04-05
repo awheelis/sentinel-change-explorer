@@ -13,9 +13,16 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from src.experimental.encoders import (  # noqa: E402
+    ENCODER_KINDS,
+    FiveChannelViTPatch8,
+    build_encoder,
+)
 from src.experimental.train_lejepa import (  # noqa: E402
     FiveChannelResNet18,
     Predictor,
+    checkpoint_filename,
+    default_mask_schedule,
     ema_schedule,
     ema_update,
     predictive_loss,
@@ -162,6 +169,102 @@ def test_ema_schedule_degenerate_single_step():
 
 
 # ── End-to-end shape smoke (no training) ─────────────────────────────────────
+
+
+# ── Encoder factory + ViT ────────────────────────────────────────────────────
+
+
+def test_encoder_factory_kinds_registered():
+    """All advertised kinds must round-trip through the factory."""
+    for kind in ENCODER_KINDS:
+        # vit_small is 22M params; skip the slow build here, we only need
+        # to check it's wired. resnet18 + vit_tiny are exercised below.
+        if kind == "vit_small_patch8":
+            continue
+        enc = build_encoder(kind)
+        y = enc(torch.zeros(1, 5, 128, 128))
+        assert y.ndim == 4, f"{kind} should return NCHW"
+        assert y.shape[0] == 1 and y.shape[2] == y.shape[3]
+
+
+def test_encoder_factory_rejects_unknown_kind():
+    with pytest.raises(ValueError, match="unknown encoder_kind"):
+        build_encoder("definitely_not_a_real_encoder")  # type: ignore[arg-type]
+
+
+def test_vit_tiny_feature_grid_is_16x16():
+    """The whole point of the ViT upgrade — dense 16x16 feature grid for
+    clean PCA→RGB visualizations."""
+    enc = FiveChannelViTPatch8(variant="tiny")
+    y = enc(torch.zeros(2, 5, 128, 128))
+    assert y.shape == (2, 192, 16, 16)
+    assert enc.embed_dim == 192
+    assert enc.grid_side == 16
+
+
+def test_vit_register_tokens_stripped_before_reshape():
+    """Forward must drop the 4 register tokens before reshaping to NCHW —
+    otherwise the grid would be 260 tokens and the reshape would fail."""
+    enc = FiveChannelViTPatch8(variant="tiny", reg_tokens=4)
+    assert enc.num_prefix_tokens == 4
+    # A forward pass that doesn't crash on the assertion inside forward()
+    # is already the test — but spot-check the output grid anyway.
+    y = enc(torch.zeros(1, 5, 128, 128))
+    assert y.shape[-2:] == (16, 16)
+
+
+# ── Mask schedule + checkpoint filename helpers ──────────────────────────────
+
+
+def test_default_mask_schedule_resnet_grid():
+    ctx, tgt = default_mask_schedule(16)
+    assert ctx + tgt <= 16
+    assert ctx > tgt  # more context than targets
+
+
+def test_default_mask_schedule_vit_grid():
+    ctx, tgt = default_mask_schedule(256)
+    assert ctx + tgt <= 256
+    # The default ratios should scale linearly with grid size
+    assert ctx == 160  # round(256 * 0.625)
+    assert tgt == 64   # round(256 * 0.25)
+
+
+def test_checkpoint_filename_roundtrip():
+    assert checkpoint_filename("resnet18") == "lejepa_resnet18_5band.pt"
+    assert (
+        checkpoint_filename("vit_tiny_patch8") == "lejepa_vit_tiny_patch8_5band.pt"
+    )
+
+
+# ── ViT end-to-end shape flow (mirrors the training inner loop) ──────────────
+
+
+def test_vit_training_inner_loop_shapes():
+    """Feed ViT features through masking + predictor exactly like train() does.
+
+    If this passes, the training loop's gather / mean-pool / predictor path
+    is shape-correct for the 256-position grid.
+    """
+    torch.manual_seed(0)
+    enc = FiveChannelViTPatch8(variant="tiny")
+    pred = Predictor(dim=enc.embed_dim, n_positions=enc.grid_side ** 2)
+    x = torch.randn(2, 5, 128, 128)
+
+    feat = enc(x)                                   # [2, 192, 16, 16]
+    flat = feat.flatten(2).transpose(1, 2)          # [2, 256, 192]
+    assert flat.shape == (2, 256, 192)
+
+    n_ctx, n_tgt = default_mask_schedule(256)
+    ctx_idx, tgt_idx = sample_masks(2, n_ctx, n_tgt, n_positions=256)
+    D = feat.shape[1]
+    ctx_embed = torch.gather(
+        flat, 1, ctx_idx.unsqueeze(-1).expand(-1, -1, D)
+    ).mean(dim=1)
+    assert ctx_embed.shape == (2, 192)
+
+    out = pred(ctx_embed, tgt_idx)
+    assert out.shape == (2, n_tgt, 192)
 
 
 def test_forward_pass_shapes_match_training_loop():

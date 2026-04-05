@@ -15,6 +15,10 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("streamlit")
 
+from src.experimental.encoders import (  # noqa: E402
+    FiveChannelResNet18,
+    FiveChannelViTPatch8,
+)
 from src.experimental.inference import (  # noqa: E402
     _center_crop_or_pad,
     _stack_bands,
@@ -22,7 +26,6 @@ from src.experimental.inference import (  # noqa: E402
     features_to_change_map,
     features_to_rgb,
 )
-from src.experimental.train_lejepa import FiveChannelResNet18  # noqa: E402
 
 
 # ── _stack_bands ─────────────────────────────────────────────────────────────
@@ -181,3 +184,40 @@ def test_extract_features_smaller_aoi_gets_padded():
     }
     feat = extract_features(_fake_bands_dict(60, 80), model)
     assert feat.shape == (512, 4, 4)
+
+
+def test_extract_features_with_vit_tiny_encoder():
+    """Gold path: ViT-Tiny/8 returns a 16x16 feature grid (256 positions).
+
+    This is the architecture that actually ships in the app; if this breaks
+    the PCA→RGB visualization degrades back to 4x4 watercolor blobs.
+    """
+    enc = FiveChannelViTPatch8(variant="tiny")
+    enc.eval()
+    model = {
+        "encoder": enc,
+        "mean": torch.zeros(1, 5, 1, 1),
+        "std": torch.ones(1, 5, 1, 1),
+        "source": "test",
+        "kind": "vit_tiny_patch8",
+    }
+    feat = extract_features(_fake_bands_dict(160, 160), model)
+    assert feat.shape == (192, 16, 16)
+
+
+def test_features_to_rgb_works_on_vit_shape():
+    """The PCA→RGB path must be shape-agnostic across encoder families."""
+    feat = np.random.randn(192, 16, 16).astype(np.float32)
+    rgb = features_to_rgb(feat, display_size=256)
+    assert rgb.shape == (256, 256, 3)
+    assert rgb.dtype == np.uint8
+    # With 256 data points SVD has enough variance to produce a real range
+    assert rgb.std() > 1.0
+
+
+def test_features_to_change_map_works_on_vit_shape():
+    a = np.random.randn(192, 16, 16).astype(np.float32)
+    b = np.random.randn(192, 16, 16).astype(np.float32)
+    out = features_to_change_map(a, b, display_size=256)
+    assert out.shape == (256, 256, 4)
+    assert out.dtype == np.uint8

@@ -82,14 +82,18 @@ Data sources: [Sentinel-2 L2A on AWS](https://registry.opendata.aws/sentinel-2-l
 ## Experimental: Foundation Model (PoC)
 
 An opt-in sidebar toggle runs the same before/after tiles through a small
-self-supervised ResNet-18 pretrained with the
-[LeJEPA](https://arxiv.org/abs/2511.08544) objective on a curated
-Sentinel-2 chip dataset. The panel shows PCA→RGB feature visualizations
-for the before and after scenes plus a learned cosine-distance change map
-alongside the classical NDVI-delta heatmap.
+self-supervised **5-channel ViT-Tiny/8 with register tokens**, pretrained
+with the [LeJEPA](https://arxiv.org/abs/2511.08544) objective on a curated
+Sentinel-2 chip dataset. The 16×16 patch-token grid (256 positions) plus
+register tokens ([Darcet et al. 2024](https://arxiv.org/abs/2309.16588))
+give the PCA→RGB feature visualizations the crisp DINOv2-style look that
+coarser conv backbones can't produce. The panel shows PCA→RGB feature
+images for the before and after scenes plus a learned cosine-distance
+change map alongside the classical NDVI-delta heatmap.
 
 - **Dataset:** [alexw0/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/alexw0/sentinel2-lejepa-preset-biased-small)
-- **Model:** [alexw0/lejepa-resnet18-sentinel2-5band](https://huggingface.co/alexw0/lejepa-resnet18-sentinel2-5band)
+- **Model (gold):** [alexw0/lejepa-vit-tiny-patch8-sentinel2-5band](https://huggingface.co/alexw0/lejepa-vit-tiny-patch8-sentinel2-5band)
+- **Model (legacy):** [alexw0/lejepa-resnet18-sentinel2-5band](https://huggingface.co/alexw0/lejepa-resnet18-sentinel2-5band) — first PoC, kept for comparison
 - **Full walkthrough:** [`src/experimental/README.md`](src/experimental/README.md)
 
 This is a proof of concept, not a SOTA system — the goal is to demonstrate

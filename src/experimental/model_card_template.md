@@ -10,7 +10,7 @@ tags:
 - self-supervised-learning
 - lejepa
 - jepa
-- resnet
+- vision-transformer
 - satellite-imagery
 - feature-extraction
 - pretraining
@@ -18,10 +18,10 @@ datasets:
 - {dataset_repo_id}
 ---
 
-# LeJEPA ResNet-18 (5-band Sentinel-2, PoC)
+# LeJEPA {architecture_name} (5-band Sentinel-2, PoC)
 
-A tiny self-supervised feature extractor for Sentinel-2 L2A imagery. A
-5-channel ResNet-18 pretrained with the
+A small self-supervised feature extractor for Sentinel-2 L2A imagery: a
+5-channel {architecture_name} pretrained with the
 [LeJEPA](https://arxiv.org/abs/2511.08544) objective (Balestriero & LeCun,
 2025) on the
 [{dataset_repo_id}](https://huggingface.co/datasets/{dataset_repo_id}) chip
@@ -37,25 +37,27 @@ substitute for Clay, Prithvi, or SSL4EO-S12 models.
 
 ## Architecture
 
-| Component      | Details                                                    |
-|----------------|------------------------------------------------------------|
-| Backbone       | ResNet-18, first `conv1` replaced with `Conv2d(5, 64, ...)` |
-| Input          | `[B, 5, 128, 128]` uint16-derived reflectance (10 m/px)   |
-| Output         | `[B, 512, 4, 4]` feature map (pre-avgpool / pre-fc)       |
-| Parameter count| ~11.2M                                                     |
-| Band order     | red, green, blue, nir, swir16 (S2 B02/B03/B04/B08/B11)    |
+| Component       | Details                                                 |
+|-----------------|---------------------------------------------------------|
+| Encoder kind    | `{encoder_kind}`                                        |
+| Backbone        | {architecture_description}                              |
+| Input           | `[B, 5, 128, 128]` uint16-derived reflectance (10 m/px) |
+| Output          | `[B, {embed_dim}, {grid_side}, {grid_side}]` feature map |
+| Feature grid    | {grid_side}x{grid_side} = {n_positions} positions       |
+| Parameter count | ~{encoder_params_m:.1f}M                                |
+| Band order      | red, green, blue, nir, swir16 (S2 B02/B03/B04/B08/B11)  |
 
-The original `avgpool` and `fc` layers are dropped — JEPA pretraining
-operates on the spatial feature map directly. A small MLP predictor head
-(~0.5M params) is used during training and is **not** included in this
-release; only the encoder is.
+{architecture_note}
+
+A small MLP predictor head is used during training and is **not** included
+in this release; only the encoder is.
 
 ## Training recipe
 
 | Hyperparameter        | Value            |
 |-----------------------|------------------|
 | Objective             | LeJEPA (predictive smooth-L1 + SIGReg) |
-| Mask scheme           | 4x4 feature grid, context=7 / target=4 disjoint |
+| Mask scheme           | {grid_side}x{grid_side} feature grid, disjoint context/target subsets |
 | Context aggregation   | mean-pool over visible positions |
 | Target encoder        | EMA of online, momentum ramp 0.996 → 1.0 |
 | Optimizer             | AdamW (lr={lr}, weight_decay=0.05) |
@@ -91,9 +93,9 @@ the dataset:
 
 ## Limitations
 
-- **Tiny training budget.** This PoC was trained on a laptop CPU; the real
-  GPU run on lightning.ai is a planned follow-up. Features will be coarse
-  and PCA projections can look noisy or flat.
+- **Tiny training budget.** This PoC was trained on the hardware noted
+  above; a full GPU run is a planned follow-up that will swap the weights
+  without any API change.
 - **Preset bias.** 70% of training chips came from 5 specific demo AOIs in
   the companion app, so the encoder is best on geography resembling those
   (coastal/tropical, desert-construction, central-European industrial,
@@ -102,8 +104,8 @@ the dataset:
   Landsat, no atmospheric TOA inputs.
 - **5 bands only.** Red-edge, cirrus, and SWIR22 are intentionally
   excluded to keep the model compact for CPU inference.
-- **No downstream supervised head.** Use `mean(dim=[2,3])` to get a `[B,
-  512]` global descriptor, or operate on the raw 4x4 spatial map.
+- **No downstream supervised head.** Use `mean(dim=[2,3])` on the feature
+  map to get a global descriptor, or operate on the raw spatial map.
 
 ## Usage
 
@@ -113,16 +115,16 @@ from huggingface_hub import hf_hub_download
 
 ckpt_path = hf_hub_download(
     repo_id="{repo_id}",
-    filename="lejepa_resnet18_5band.pt",
+    filename="{hub_filename}",
 )
 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
-# The encoder class lives in the companion repo:
+# The encoder factory lives in the companion repo:
 #   git clone https://github.com/awheelis/sentinel-change-explorer
-#   from src.experimental.train_lejepa import FiveChannelResNet18
-from src.experimental.train_lejepa import FiveChannelResNet18
+#   from src.experimental.encoders import build_encoder
+from src.experimental.encoders import build_encoder
 
-encoder = FiveChannelResNet18()
+encoder = build_encoder(ckpt["config"]["encoder_kind"])
 encoder.load_state_dict(ckpt["encoder_state"])
 encoder.eval()
 
@@ -132,7 +134,7 @@ mean = torch.tensor(norm["mean"]).view(1, 5, 1, 1)
 std = torch.tensor(norm["std"]).view(1, 5, 1, 1).clamp(min=1.0)
 
 # bands: [B, 5, 128, 128] float tensor in raw uint16-derived reflectance
-# feat:  [B, 512, 4, 4]
+# feat:  [B, {embed_dim}, {grid_side}, {grid_side}]
 with torch.no_grad():
     x = (bands - mean) / std
     feat = encoder(x)
@@ -147,8 +149,8 @@ with torch.no_grad():
 ## Citation
 
 ```bibtex
-@misc{{lejepa_resnet18_sentinel2_5band,
-  title  = {{LeJEPA ResNet-18 (5-band Sentinel-2, PoC)}},
+@misc{{lejepa_{encoder_kind}_sentinel2_5band,
+  title  = {{LeJEPA {architecture_name} (5-band Sentinel-2, PoC)}},
   author = {{Wheelis, Alex}},
   year   = {{{build_year}}},
   url    = {{https://huggingface.co/{repo_id}}}
@@ -159,6 +161,14 @@ with torch.no_grad():
   author = {{Balestriero, Randall and LeCun, Yann}},
   year   = {{2025}},
   eprint = {{2511.08544}},
+  archivePrefix = {{arXiv}}
+}}
+
+@misc{{darcet2024registers,
+  title  = {{Vision Transformers Need Registers}},
+  author = {{Darcet, Timothée and Oquab, Maxime and Mairal, Julien and Bojanowski, Piotr}},
+  year   = {{2024}},
+  eprint = {{2309.16588}},
   archivePrefix = {{arXiv}}
 }}
 ```

@@ -1,21 +1,23 @@
 """Inference + PCA→RGB visualization for the experimental LeJEPA feature.
 
-Phase 6 of the experimental feature. Loads a trained LeJEPA ResNet-18 encoder
-from the HuggingFace Hub (or a local checkpoint), extracts features for the
-before/after scenes already present in the Streamlit app's session state, and
-renders three visual outputs:
+Phase 6 of the experimental feature. Loads a trained LeJEPA encoder from
+the HuggingFace Hub (or a local checkpoint), extracts features for the
+before/after scenes already present in the Streamlit app's session state,
+and renders three visual outputs:
 
-    1. PCA→RGB feature image of the before scene (4x4 → display size).
+    1. PCA→RGB feature image of the before scene.
     2. PCA→RGB feature image of the after scene.
-    3. Per-position cosine-distance change map with a matplotlib `magma`
-       colormap, shown side-by-side with the existing classical NDVI-delta
-       heatmap so the user can eyeball learned-vs-classical agreement.
+    3. Per-position cosine-distance change map with a matplotlib ``magma``
+       colormap.
 
-The encoder class itself lives in ``train_lejepa`` — we import it from there
-so the weight keys match by construction. ``torch`` is pulled in through the
-``experimental`` extras; this module only gets imported by ``app.py`` after
-the sidebar toggle + ``_has_torch()`` gate, so its import failure is
-impossible in normal runs.
+The encoder class is selected from the checkpoint's own ``config.encoder_kind``
+metadata via the ``build_encoder`` factory in ``src.experimental.encoders``.
+This keeps inference agnostic to whether the weights came from the legacy
+ResNet-18 PoC, the gold ViT-Tiny/8, or a future ViT-Small/8 GPU run — the
+same panel code handles all of them as long as the checkpoint carries its
+own architecture label. ``torch`` is pulled in through the ``experimental``
+extras; this module is only imported from ``app.py`` after the sidebar
+toggle + ``_has_torch()`` gate.
 """
 from __future__ import annotations
 
@@ -45,28 +47,36 @@ _CHIP_SIZE: int = 128
 def load_model_cached(
     repo_id: str | None = None,
     local_checkpoint: str | None = None,
+    hub_filename: str | None = None,
 ) -> dict[str, Any]:
     """Load the encoder + norm stats either from the HF Hub or a local path.
 
     Cached with ``@st.cache_resource`` so the download + load happens exactly
     once per Streamlit session even as the user clicks between presets.
 
+    The encoder class is selected from the checkpoint's own
+    ``config.encoder_kind`` metadata so the same loader works across all
+    published weights (legacy ResNet-18, ViT-Tiny/8, ViT-Small/8) without
+    any branching in the caller.
+
     Args:
         repo_id: HF Hub model repo id (e.g.
-            ``alexw0/lejepa-resnet18-sentinel2-5band``). Used if
+            ``alexw0/lejepa-vit-tiny-patch8-sentinel2-5band``). Used if
             ``local_checkpoint`` is not set.
         local_checkpoint: Absolute path to a local ``.pt`` file. Takes
             precedence over ``repo_id`` if provided — useful for developing
             the app against an as-yet-unpublished checkpoint.
+        hub_filename: Filename within the hub repo. Defaults to the
+            canonical ``lejepa_vit_tiny_patch8_5band.pt``.
 
     Returns:
         Dict with keys ``encoder`` (nn.Module in eval mode, CPU), ``mean``
-        (torch float tensor [1,5,1,1]), ``std`` (same shape), and ``source``
-        (human-readable string for the UI caption).
+        (torch float tensor [1,5,1,1]), ``std`` (same shape), ``kind`` (the
+        encoder_kind string), and ``source`` (human-readable UI caption).
     """
     import torch
 
-    from src.experimental.train_lejepa import FiveChannelResNet18
+    from src.experimental.encoders import build_encoder
 
     if local_checkpoint is not None:
         ckpt_path = Path(local_checkpoint)
@@ -74,9 +84,8 @@ def load_model_cached(
     elif repo_id is not None:
         from huggingface_hub import hf_hub_download
 
-        ckpt_path = Path(
-            hf_hub_download(repo_id=repo_id, filename="lejepa_resnet18_5band.pt")
-        )
+        filename = hub_filename or "lejepa_vit_tiny_patch8_5band.pt"
+        ckpt_path = Path(hf_hub_download(repo_id=repo_id, filename=filename))
         source = f"hub: {repo_id}"
     else:
         raise ValueError("Must provide either repo_id or local_checkpoint")
@@ -84,7 +93,11 @@ def load_model_cached(
     logger.info("Loading LeJEPA encoder from %s", ckpt_path)
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
-    encoder = FiveChannelResNet18(in_channels=5)
+    # Encoder kind lives in the checkpoint's config. Old ResNet-only PoC
+    # checkpoints don't have this key, so we fall back to "resnet18" for
+    # compatibility.
+    kind = ckpt.get("config", {}).get("encoder_kind", "resnet18")
+    encoder = build_encoder(kind)
     encoder.load_state_dict(ckpt["encoder_state"])
     encoder.eval()
 
@@ -93,7 +106,13 @@ def load_model_cached(
     std = (
         torch.tensor(norm["std"], dtype=torch.float32).view(1, 5, 1, 1).clamp(min=1.0)
     )
-    return {"encoder": encoder, "mean": mean, "std": std, "source": source}
+    return {
+        "encoder": encoder,
+        "mean": mean,
+        "std": std,
+        "kind": kind,
+        "source": source,
+    }
 
 
 # ── Preprocessing ────────────────────────────────────────────────────────────
@@ -155,8 +174,10 @@ def extract_features(
 ) -> np.ndarray:
     """Run a dict of load_bands() arrays through the LeJEPA encoder.
 
-    Returns:
-        ``[512, 4, 4]`` numpy float32 feature map for a single tile.
+    The output feature-map shape depends on the encoder:
+    ``[512, 4, 4]`` for ResNet-18, ``[192, 16, 16]`` for ViT-Tiny/8,
+    ``[384, 16, 16]`` for ViT-Small/8. Downstream visualization code is
+    shape-agnostic — it accepts any ``[C, H, W]``.
     """
     import torch
 
@@ -165,8 +186,8 @@ def extract_features(
     x = torch.from_numpy(stacked).unsqueeze(0)         # [1, 5, 128, 128]
     x = (x - model["mean"]) / model["std"]
     with torch.no_grad():
-        feat = model["encoder"](x)                     # [1, 512, 4, 4]
-    return feat.squeeze(0).cpu().numpy()               # [512, 4, 4]
+        feat = model["encoder"](x)                     # [1, C, H, W]
+    return feat.squeeze(0).cpu().numpy()               # [C, H, W]
 
 
 # ── Feature visualization ────────────────────────────────────────────────────
@@ -236,8 +257,11 @@ def features_to_change_map(
     else:
         norm = (dist_map - lo) / (hi - lo)
     rgba = (cm.magma(norm) * 255.0).astype(np.uint8)   # [H, W, 4]
+    # Bilinear for ViT-scale grids (16x16+) where interpolation reads as
+    # smooth; stays honest on the coarse 4x4 ResNet grid too because the
+    # source resolution is still visible through the smoothing.
     pil = Image.fromarray(rgba).resize(
-        (display_size, display_size), resample=Image.NEAREST
+        (display_size, display_size), resample=Image.BILINEAR
     )
     return np.asarray(pil)
 
@@ -245,18 +269,36 @@ def features_to_change_map(
 # ── Streamlit panel ──────────────────────────────────────────────────────────
 
 
-#: Defaults for the panel's model source. When the PoC model is published
-#: to the Hub, update these or pass overrides via render_experimental_panel.
-DEFAULT_REPO_ID = "alexw0/lejepa-resnet18-sentinel2-5band"
-DEFAULT_LOCAL_FALLBACK = "checkpoints/lejepa_resnet18_5band.pt"
+#: Defaults for the panel's model source. The ViT-Tiny/8 checkpoint is the
+#: primary — it produces the sharp 16×16 feature-grid PCA visualizations.
+#: The resnet18 entry is kept as a backup so an old checkpoint still renders.
+DEFAULT_REPO_ID = "alexw0/lejepa-vit-tiny-patch8-sentinel2-5band"
+DEFAULT_HUB_FILENAME = "lejepa_vit_tiny_patch8_5band.pt"
+
+#: Local checkpoint search order. First match wins. Ordered by preference
+#: (gold first) so a fresh ViT run transparently overrides a stale ResNet
+#: checkpoint sitting next to it.
+_LOCAL_CANDIDATES: tuple[str, ...] = (
+    "checkpoints/lejepa_vit_small_patch8_5band.pt",   # future GPU upgrade
+    "checkpoints/lejepa_vit_tiny_patch8_5band.pt",    # M1 PoC default
+    "checkpoints/lejepa_resnet18_5band.pt",           # legacy
+)
 
 
 def _resolve_model() -> dict[str, Any]:
-    """Prefer a local checkpoint during development, fall back to the Hub."""
-    local = Path(DEFAULT_LOCAL_FALLBACK)
-    if local.exists():
-        return load_model_cached(local_checkpoint=str(local.resolve()))
-    return load_model_cached(repo_id=DEFAULT_REPO_ID)
+    """Prefer a local checkpoint during development, fall back to the Hub.
+
+    Walks ``_LOCAL_CANDIDATES`` in order and loads the first one that exists.
+    This means a freshly trained ViT checkpoint automatically takes over from
+    a stale ResNet checkpoint in the same folder without any config changes.
+    """
+    for cand in _LOCAL_CANDIDATES:
+        p = Path(cand)
+        if p.exists():
+            return load_model_cached(local_checkpoint=str(p.resolve()))
+    return load_model_cached(
+        repo_id=DEFAULT_REPO_ID, hub_filename=DEFAULT_HUB_FILENAME
+    )
 
 
 def render_experimental_panel(
@@ -272,10 +314,12 @@ def render_experimental_panel(
     """
     st.markdown("### Experimental: Foundation Model (PoC)")
     st.caption(
-        "LeJEPA ResNet-18 self-supervised features, trained on ~3k "
-        "Sentinel-2 chips biased toward the 5 demo presets. **This is a "
-        "proof of concept** — features are coarse and PCA projections can "
-        "look noisy. Full methodology in the expander below."
+        "LeJEPA self-supervised features (ViT-Tiny patch 8 with register "
+        "tokens by default), pretrained on a small preset-biased Sentinel-2 "
+        "chip dataset. The ViT's 16×16 feature grid is what makes the "
+        "PCA→RGB projections crisp — a legacy ResNet-18 checkpoint is also "
+        "supported for comparison. **This is a proof of concept.** Full "
+        "methodology in the expander below."
     )
 
     try:
@@ -329,4 +373,4 @@ replace these weights with a stronger checkpoint without any API
 changes.
 """
         )
-    st.caption(f"Model source: {model['source']}")
+    st.caption(f"Model source: {model['source']} — encoder: {model.get('kind', '?')}")
