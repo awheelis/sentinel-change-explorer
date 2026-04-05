@@ -40,6 +40,11 @@ logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _NORM_STATS_REPO_PATH = _REPO_ROOT / "src" / "experimental" / "norm_stats.json"
+_DATASET_CARD_TEMPLATE_PATH = (
+    _REPO_ROOT / "src" / "experimental" / "dataset_card_template.md"
+)
+
+_REFLECTANCE_BAND_DISPLAY = ("red", "green", "blue", "nir", "swir16")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -615,6 +620,144 @@ def save_dataset_bundle(
     return output_dir
 
 
+# ── Dataset card rendering + HF Hub push ─────────────────────────────────────
+
+
+def _format_preset_aoi_list(presets: list[dict[str, Any]]) -> str:
+    """Render the presets table for the dataset card."""
+    lines = [
+        "| Preset | Center (lon, lat) | Before range | After range |",
+        "|--------|-------------------|--------------|-------------|",
+    ]
+    for p in presets:
+        west, south, east, north = p["bbox"]
+        clon = (west + east) / 2
+        clat = (south + north) / 2
+        before = f"{p['before_range'][0]} → {p['before_range'][1]}"
+        after = f"{p['after_range'][0]} → {p['after_range'][1]}"
+        lines.append(
+            f"| {p['name']} | ({clon:.3f}, {clat:.3f}) | {before} | {after} |"
+        )
+    return "\n".join(lines)
+
+
+def _format_global_points_list(points: tuple[dict[str, Any], ...]) -> str:
+    """Render the global diversity points as a compact bullet list."""
+    return "\n".join(
+        f"- `{pt['name']}` — ({pt['lon']:.2f}, {pt['lat']:.2f})"
+        for pt in points
+    )
+
+
+def _format_norm_stats_table(stats: dict[str, Any]) -> str:
+    """Render the per-band mean/std table."""
+    bands = stats.get("bands", list(_REFLECTANCE_BAND_DISPLAY))
+    means = stats["mean"]
+    stds = stats["std"]
+    return "\n".join(
+        f"| {b:<6} | {m:>10.2f} | {s:>10.2f} |"
+        for b, m, s in zip(bands, means, stds)
+    )
+
+
+def render_dataset_card(
+    *,
+    repo_id: str,
+    presets: list[dict[str, Any]],
+    n_preset_chips: int,
+    n_global_chips: int,
+    train_size: int,
+    val_size: int,
+    norm_stats: dict[str, Any],
+    build_date: str | None = None,
+) -> str:
+    """Render the dataset card markdown with dynamic stats substituted in.
+
+    Reads ``dataset_card_template.md`` from disk and fills in placeholders.
+    The template uses ``str.format`` with doubled braces for literal JSON/code
+    blocks, so all dynamic fields are standard ``{name}`` tokens.
+
+    Args:
+        repo_id: HuggingFace Hub repo id (e.g. ``user/dataset-name``).
+        presets: Loaded preset list from ``config/presets.json``.
+        n_preset_chips: Count of chips sourced from preset AOIs.
+        n_global_chips: Count of chips sourced from global diversity points.
+        train_size: Number of rows in the train split.
+        val_size: Number of rows in the validation split.
+        norm_stats: Dict from ``compute_norm_stats``.
+        build_date: ISO date string; defaults to today.
+
+    Returns:
+        The fully rendered README.md content as a string.
+    """
+    from datetime import date
+
+    if build_date is None:
+        build_date = date.today().isoformat()
+    build_year = build_date.split("-")[0]
+
+    template = _DATASET_CARD_TEMPLATE_PATH.read_text()
+    return template.format(
+        repo_id=repo_id,
+        build_date=build_date,
+        build_year=build_year,
+        total_chips=n_preset_chips + n_global_chips,
+        n_preset_chips=n_preset_chips,
+        n_global_chips=n_global_chips,
+        train_size=train_size,
+        val_size=val_size,
+        preset_aoi_list=_format_preset_aoi_list(presets),
+        global_points_list=_format_global_points_list(GLOBAL_POINTS),
+        norm_stats_table=_format_norm_stats_table(norm_stats),
+    )
+
+
+def push_dataset_to_hub(
+    dataset_dict,
+    *,
+    repo_id: str,
+    card_markdown: str,
+    private: bool = False,
+) -> str:
+    """Push the DatasetDict to the HuggingFace Hub with a dataset card.
+
+    Two-step upload:
+      1. ``DatasetDict.push_to_hub`` — creates the repo if needed and uploads
+         the parquet shards for train/validation.
+      2. ``HfApi.upload_file`` — writes ``README.md`` to the same repo so the
+         dataset-viewer renders the card and the YAML frontmatter tags the
+         dataset correctly.
+
+    Args:
+        dataset_dict: The DatasetDict from ``split_train_val``.
+        repo_id: Target repo id (``user/dataset-name`` or ``org/dataset-name``).
+        card_markdown: Rendered dataset card content (from
+            ``render_dataset_card``).
+        private: If True, creates a private repo.
+
+    Returns:
+        The public URL of the dataset on the Hub.
+    """
+    from huggingface_hub import HfApi
+
+    logger.info("Pushing dataset splits to hub at %s …", repo_id)
+    dataset_dict.push_to_hub(repo_id, private=private)
+
+    logger.info("Uploading README.md (dataset card) …")
+    api = HfApi()
+    api.upload_file(
+        path_or_fileobj=card_markdown.encode("utf-8"),
+        path_in_repo="README.md",
+        repo_id=repo_id,
+        repo_type="dataset",
+        commit_message="Add dataset card",
+    )
+
+    url = f"https://huggingface.co/datasets/{repo_id}"
+    logger.info("Dataset published: %s", url)
+    return url
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
@@ -625,6 +768,7 @@ def run_build(
     max_scenes_per_range: int = 6,
     seed: int = 42,
     push_to_hub: str | None = None,
+    private: bool = False,
     copy_norm_stats_to_repo: bool = False,
 ) -> Path:
     """End-to-end dataset build: collect chips, assemble, split, save.
@@ -636,9 +780,10 @@ def run_build(
         max_scenes_per_range: Cap on STAC results per preset per range.
         seed: Random seed for the train/val split.
         push_to_hub: Optional HuggingFace repo id (e.g. ``user/dataset-name``).
-            Phase 3 wires this through to ``Dataset.push_to_hub``. For now,
-            passing it raises NotImplementedError so the CLI surface is
-            stable but the actual upload lands in Phase 3.
+            When set, the built DatasetDict is uploaded to the Hub and a
+            rendered dataset card is pushed alongside it.
+        private: When ``push_to_hub`` is set, controls whether the created
+            repo is private.
 
     Returns:
         Absolute path to the saved output directory.
@@ -693,10 +838,22 @@ def run_build(
     )
 
     if push_to_hub is not None:
-        raise NotImplementedError(
-            "push_to_hub lands in Phase 3. For now build locally, then push "
-            "in a separate step."
+        card_md = render_dataset_card(
+            repo_id=push_to_hub,
+            presets=presets,
+            n_preset_chips=len(preset_chips),
+            n_global_chips=len(global_chips),
+            train_size=len(dd["train"]),
+            val_size=len(dd["validation"]),
+            norm_stats=stats,
         )
+        url = push_dataset_to_hub(
+            dd,
+            repo_id=push_to_hub,
+            card_markdown=card_md,
+            private=private,
+        )
+        logger.info("Published to: %s", url)
 
     return out_path
 
@@ -730,7 +887,13 @@ def _cli() -> None:
     )
     parser.add_argument(
         "--push-to-hub", type=str, default=None,
-        help="(Phase 3) HuggingFace repo id to push the built dataset to.",
+        help="HuggingFace repo id to push the built dataset to (e.g. "
+             "'user/sentinel2-lejepa-preset-biased-small'). Requires prior "
+             "`huggingface-cli login`.",
+    )
+    parser.add_argument(
+        "--private", action="store_true",
+        help="When pushing to the Hub, create a private dataset repo.",
     )
     parser.add_argument(
         "--copy-norm-stats-to-repo", action="store_true",
@@ -755,6 +918,7 @@ def _cli() -> None:
         max_scenes_per_range=args.max_scenes_per_range,
         seed=args.seed,
         push_to_hub=args.push_to_hub,
+        private=args.private,
         copy_norm_stats_to_repo=args.copy_norm_stats_to_repo,
     )
     logger.info("Done. Dataset saved to: %s", out)
@@ -785,5 +949,7 @@ __all__ = [
     "split_train_val",
     "compute_norm_stats",
     "save_dataset_bundle",
+    "render_dataset_card",
+    "push_dataset_to_hub",
     "run_build",
 ]

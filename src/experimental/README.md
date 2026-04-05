@@ -28,6 +28,25 @@ uv sync --extra experimental
 huggingface-cli login   # write-token for publishing, read-token for pulling
 ```
 
+### HuggingFace token setup
+
+Publishing the dataset (Phase 3) and the trained model (Phase 5) both
+require a HuggingFace account and an access token with **write** scope:
+
+1. Create an account at https://huggingface.co if you don't have one.
+2. Go to https://huggingface.co/settings/tokens and create a token with
+   the `write` role. A fine-grained token scoped to your own namespace
+   with `repo.write` permission is sufficient and safer than a broad
+   `write` token.
+3. Run `huggingface-cli login` and paste the token. It gets stored in
+   `~/.cache/huggingface/token` and is picked up automatically by both
+   `datasets.push_to_hub` and `huggingface_hub.HfApi`.
+4. Confirm with `huggingface-cli whoami` — you should see your username.
+
+Read-only pulls (running inference in Phase 6 against the published
+model) work with an unauthenticated token or a `read`-scoped token; only
+publishing needs `write`.
+
 After install, toggle the "Experimental: Foundation Model" checkbox in
 the app sidebar. If the extras aren't installed the panel shows an
 install hint instead of trying to import torch.

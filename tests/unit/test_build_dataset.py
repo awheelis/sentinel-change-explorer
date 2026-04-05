@@ -230,6 +230,92 @@ def test_bbox_around_point_latitude_invariance():
     assert (north_eq - south_eq) == pytest.approx(north_60 - south_60, abs=1e-6)
 
 
+# ── render_dataset_card ──────────────────────────────────────────────────────
+
+
+from src.experimental.build_dataset import render_dataset_card  # noqa: E402
+
+
+def _fake_presets():
+    return [
+        {
+            "name": "Demo Preset",
+            "bbox": [-156.695, 20.860, -156.660, 20.895],
+            "before_range": ["2023-05-01", "2023-07-31"],
+            "after_range": ["2023-09-01", "2023-11-30"],
+        }
+    ]
+
+
+def _fake_stats():
+    return {
+        "bands": ["red", "green", "blue", "nir", "swir16"],
+        "mean": [1500.0, 1200.0, 900.0, 2200.0, 3100.0],
+        "std": [400.0, 350.0, 300.0, 500.0, 600.0],
+        "chip_count": 100,
+        "pixel_count": 100 * 128 * 128,
+    }
+
+
+def test_render_dataset_card_substitutes_all_placeholders():
+    """Rendered card contains substituted stats and no leftover braces."""
+    card = render_dataset_card(
+        repo_id="alexw0/sentinel2-lejepa-test",
+        presets=_fake_presets(),
+        n_preset_chips=70,
+        n_global_chips=30,
+        train_size=90,
+        val_size=10,
+        norm_stats=_fake_stats(),
+        build_date="2026-04-04",
+    )
+    # Dynamic substitutions
+    assert "alexw0/sentinel2-lejepa-test" in card
+    assert "2026-04-04" in card
+    assert "Demo Preset" in card
+    assert "sahara_algeria" in card  # global points list rendered
+    assert "1500.00" in card         # norm stats mean for red
+    assert "600.00" in card          # norm stats std for swir16
+    assert "| 70 " in card or "70 " in card  # n_preset_chips
+    # No unsubstituted {name} tokens left behind (doubled braces render as single)
+    assert "{build_date}" not in card
+    assert "{repo_id}" not in card
+    assert "{norm_stats_table}" not in card
+
+
+def test_render_dataset_card_defaults_build_date_to_today():
+    """Omitting build_date falls back to today's date."""
+    from datetime import date
+    card = render_dataset_card(
+        repo_id="u/x",
+        presets=_fake_presets(),
+        n_preset_chips=1,
+        n_global_chips=1,
+        train_size=2,
+        val_size=0,
+        norm_stats=_fake_stats(),
+    )
+    assert date.today().isoformat() in card
+
+
+def test_render_dataset_card_has_yaml_frontmatter():
+    """Card starts with YAML frontmatter so HF Hub tags the dataset."""
+    card = render_dataset_card(
+        repo_id="u/x",
+        presets=_fake_presets(),
+        n_preset_chips=1,
+        n_global_chips=1,
+        train_size=2,
+        val_size=0,
+        norm_stats=_fake_stats(),
+    )
+    assert card.startswith("---\n")
+    # frontmatter block closes before the H1
+    head, _, _ = card[4:].partition("\n---\n")
+    assert "license: cc-by-sa-4.0" in head
+    assert "sentinel-2" in head
+
+
 # ── Dataset assembly (requires the `datasets` extra) ─────────────────────────
 # These tests are skipped automatically when the experimental extras aren't
 # installed, so the pure-helper tests above still run in a minimal env.
