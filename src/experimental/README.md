@@ -84,7 +84,7 @@ install hint instead of trying to import torch.
        --push-to-hub <user>/sentinel2-lejepa-preset-biased-small
    ```
    The published dataset for this repo lives at
-   [falafel-hockey/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-preset-biased-small).
+   [ANONYMOUS/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/ANONYMOUS/sentinel2-lejepa-preset-biased-small).
 
 2. **Train** (Phase 4). ViT-Tiny/8 on M1 CPU (PoC, ~20 min on 500 chips):
    ```bash

@@ -20,8 +20,8 @@
 # tuned to fit in ~1 hour of H100 time:
 #   ENCODER=vit_small_patch8 IMG_SIZE=256 PRETRAINED=1 \
 #     BATCH_SIZE=192 EPOCHS=150 \
-#     DATASET_REPO=falafel-hockey/sentinel2-lejepa-global-diverse-256 \
-#     MODEL_REPO_ID=falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band \
+#     DATASET_REPO=ANONYMOUS/sentinel2-lejepa-global-diverse-256 \
+#     MODEL_REPO_ID=ANONYMOUS/lejepa-vit-small-patch8-256-sentinel2-5band \
 #     WANDB_RUN_NAME=h100-dino-init-global-256 \
 #     bash src/experimental/lightning_train.sh
 #
@@ -38,10 +38,10 @@ EPOCHS="${EPOCHS:-50}"
 BATCH_SIZE="${BATCH_SIZE:-128}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
 
-DATASET_REPO="${DATASET_REPO:-falafel-hockey/sentinel2-lejepa-preset-biased-small}"
+DATASET_REPO="${DATASET_REPO:-ANONYMOUS/sentinel2-lejepa-preset-biased-small}"
 DATASET_DIR="${DATASET_DIR:-cache/lejepa_dataset}"
 
-MODEL_REPO_ID="${MODEL_REPO_ID:-falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band}"
+MODEL_REPO_ID="${MODEL_REPO_ID:-ANONYMOUS/lejepa-vit-tiny-patch8-sentinel2-5band}"
 MODEL_PRIVATE="${MODEL_PRIVATE:-0}"  # set to 1 to publish as a private repo
 
 WANDB_PROJECT="${WANDB_PROJECT:-sentinel-change-lejepa}"

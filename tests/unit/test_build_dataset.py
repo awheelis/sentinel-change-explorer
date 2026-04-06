@@ -260,7 +260,7 @@ def _fake_stats():
 def test_render_dataset_card_substitutes_all_placeholders():
     """Rendered card contains substituted stats and no leftover braces."""
     card = render_dataset_card(
-        repo_id="falafel-hockey/sentinel2-lejepa-test",
+        repo_id="ANONYMOUS/sentinel2-lejepa-test",
         presets=_fake_presets(),
         n_preset_chips=70,
         n_global_chips=30,
@@ -270,7 +270,7 @@ def test_render_dataset_card_substitutes_all_placeholders():
         build_date="2026-04-04",
     )
     # Dynamic substitutions
-    assert "falafel-hockey/sentinel2-lejepa-test" in card
+    assert "ANONYMOUS/sentinel2-lejepa-test" in card
     assert "2026-04-04" in card
     assert "Demo Preset" in card
     assert "sahara_algeria" in card  # global points list rendered

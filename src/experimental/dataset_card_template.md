@@ -21,7 +21,7 @@ task_categories:
 A small, preset-biased Sentinel-2 L2A chip dataset curated for self-supervised
 pretraining of a [LeJEPA](https://arxiv.org/abs/2511.08544) ResNet-18 encoder.
 Built as a reproducibility artifact for the
-[Sentinel Change Explorer](https://github.com/falafel-hockey/sentinel-change-explorer)
+[Sentinel Change Explorer](https://github.com/ANONYMOUS/sentinel-change-explorer)
 proof-of-concept foundation-model change-detection feature.
 
 **This is a proof of concept, not a general-purpose EO pretraining corpus.** It
