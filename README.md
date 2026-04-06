@@ -7,16 +7,19 @@ footprints, roads, and POIs provide ground-truth context.
 
 ## What It Does
 
-1. **Choose a location** — 5 curated presets (Amazon deforestation, Las Vegas
-   sprawl, Tonga eruption, Aral Sea retreat, Turkish earthquake) or enter a
-   custom bounding box.
+1. **Choose a location** — 5 curated presets (Lahaina wildfire, Pakistan
+   mega-flood, Gigafactory Berlin, Black Summer bushfires, Egypt's new
+   capital) or enter a custom bounding box.
 2. **Choose two date ranges** — the app finds the least-cloudy Sentinel-2 scene
    in each range automatically.
 3. **View results**:
    - Side-by-side true-color satellite images
-   - NDVI / NDBI / MNDWI change heatmap (red = loss, blue = gain)
+   - NDVI / NDBI / MNDWI / EVI change heatmap (red = loss, blue = gain)
+   - Classified change map (vegetation loss, urban conversion, flooding, etc.)
    - Overture Maps buildings, roads, and POIs overlaid on the change map
+   - Time-series anomaly chart for the selected index
    - Summary statistics (% area changed, scene metadata)
+   - GeoTIFF export of change results
 
 ## Install
 
@@ -42,12 +45,13 @@ Then open [http://localhost:8501](http://localhost:8501).
 
 ## What to Look At
 
-- **Amazon Deforestation (Rondônia)** — select NDVI index. Red patches = forest
-  cleared since 2019. Roads from Overture show the infrastructure driving
-  deforestation.
-- **Las Vegas Urban Expansion** — select NDBI. Blue patches = new impervious
-  surfaces (concrete, rooftops) in former desert.
-- **Aral Sea Retreat** — select MNDWI. Red = water that disappeared 2018→2023.
+- **Lahaina Wildfire, Maui** — select NDVI. Red patches = vegetation
+  incinerated by the August 2023 wildfire. Overture buildings show the
+  dense residential fabric that was destroyed.
+- **Gigafactory Berlin** — select NDBI. Red = new impervious surfaces
+  (factory roof, parking lots) carved out of pine forest.
+- **Pakistan Mega-Flood, Sindh** — select MNDWI. Blue = floodwater that
+  submerged farmland and villages in August 2022.
 
 ## Tests
 
@@ -63,7 +67,7 @@ uv run python tests/e2e_visual_test.py    # visual E2E via headless Chromium (~3
 
 For a detailed visual E2E testing procedure (install steps, timing expectations,
 screenshot verification checklist, known issues) see
-[docs/VISUAL_E2E_TEST_PROCEDURE.md](docs/VISUAL_E2E_TEST_PROCEDURE.md).
+[VISUAL_E2E_TEST_PROCEDURE.md](VISUAL_E2E_TEST_PROCEDURE.md).
 
 ## Tech Stack
 
@@ -72,7 +76,7 @@ screenshot verification checklist, known issues) see
 | Frontend | Streamlit + streamlit-folium |
 | STAC search | pystac-client (Element84 Earth Search v1) |
 | Band loading | rasterio (windowed COG reads over S3) |
-| Index computation | numpy |
+| Index computation | numpy (NDVI, NDBI, MNDWI, EVI) |
 | Vector data | Overture Maps + geopandas |
 | Maps | folium |
 

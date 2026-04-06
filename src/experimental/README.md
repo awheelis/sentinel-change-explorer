@@ -128,8 +128,8 @@ Weights & Biases. Authenticate once with `wandb login` before the first run.
 
 ## Status
 
-Implementation proceeds in 7 phases. Current status lives in
-`PRIORITIZED_BACKLOG.md` item #8. Each phase ends in a shippable state.
+Implementation proceeded in 7 phases, each ending in a shippable state.
+All phases are complete through inference UI integration.
 
 ## References
 
