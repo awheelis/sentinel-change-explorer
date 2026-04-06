@@ -33,7 +33,11 @@ import sys
 import time
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+except ModuleNotFoundError:
+    import pytest
+    pytest.skip("playwright is not installed – skipping e2e visual tests", allow_module_level=True)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 REPO_ROOT = Path(__file__).resolve().parent.parent
