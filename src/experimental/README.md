@@ -81,10 +81,10 @@ install hint instead of trying to import torch.
 1. **Build + publish dataset** (Phase 2-3):
    ```bash
    uv run python -m src.experimental.build_dataset \
-       --push-to-hub <user>/sentinel2-lejepa-preset-biased-small
+       --push-to-hub <user>/sentinel2-lejepa-global-diverse-256
    ```
    The published dataset for this repo lives at
-   [falafel-hockey/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-preset-biased-small).
+   [falafel-hockey/sentinel2-lejepa-global-diverse-256](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-global-diverse-256).
 
 2. **Train** (Phase 4). ViT-Tiny/8 on M1 CPU (PoC, ~20 min on 500 chips):
    ```bash
@@ -98,7 +98,7 @@ install hint instead of trying to import torch.
    ```bash
    python -m src.experimental.train_lejepa \
        --encoder vit_small_patch8 \
-       --dataset <user>/sentinel2-lejepa-preset-biased-small \
+       --dataset <user>/sentinel2-lejepa-global-diverse-256 \
        --epochs 50 --batch-size 128
    ```
    Legacy ResNet-18 (kept for comparison only, not recommended):
@@ -113,7 +113,7 @@ install hint instead of trying to import torch.
    ```bash
    uv run python -m src.experimental.upload_model \
        --checkpoint checkpoints/lejepa_vit_tiny_patch8_5band.pt \
-       --repo-id <user>/lejepa-vit-tiny-patch8-sentinel2-5band
+       --repo-id <user>/lejepa-vit-small-patch8-256-sentinel2-5band
    ```
 
 4. **Run inference** (Phase 6): open the app, toggle the sidebar checkbox.

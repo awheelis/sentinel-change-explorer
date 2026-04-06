@@ -1032,7 +1032,7 @@ def _cli() -> None:
     parser.add_argument(
         "--push-to-hub", type=str, default=None,
         help="HuggingFace repo id to push the built dataset to (e.g. "
-             "'user/sentinel2-lejepa-preset-biased-small'). Requires prior "
+             "'user/sentinel2-lejepa-global-diverse-256'). Requires prior "
              "`huggingface-cli login`.",
     )
     parser.add_argument(

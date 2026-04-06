@@ -95,9 +95,8 @@ coarser conv backbones can't produce. The panel shows PCA→RGB feature
 images for the before and after scenes plus a learned cosine-distance
 change map alongside the classical NDVI-delta heatmap.
 
-- **Dataset:** [falafel-hockey/sentinel2-lejepa-preset-biased-small](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-preset-biased-small)
-- **Model (gold):** [falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band](https://huggingface.co/falafel-hockey/lejepa-vit-tiny-patch8-sentinel2-5band)
-- **Model (legacy):** [falafel-hockey/lejepa-resnet18-sentinel2-5band](https://huggingface.co/falafel-hockey/lejepa-resnet18-sentinel2-5band) — first PoC, kept for comparison
+- **Dataset:** [falafel-hockey/sentinel2-lejepa-global-diverse-256](https://huggingface.co/datasets/falafel-hockey/sentinel2-lejepa-global-diverse-256)
+- **Model:** [falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band](https://huggingface.co/falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band)
 - **Full walkthrough:** [`src/experimental/README.md`](src/experimental/README.md)
 
 This is a proof of concept, not a SOTA system — the goal is to demonstrate

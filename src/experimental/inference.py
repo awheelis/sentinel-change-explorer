@@ -62,7 +62,7 @@ def load_model_cached(
 
     Args:
         repo_id: HF Hub model repo id (e.g.
-            ``ANONYMOUS/lejepa-vit-tiny-patch8-sentinel2-5band``). Used if
+            ``falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band``). Used if
             ``local_checkpoint`` is not set.
         local_checkpoint: Absolute path to a local ``.pt`` file. Takes
             precedence over ``repo_id`` if provided — useful for developing
@@ -279,8 +279,8 @@ def features_to_change_map(
 #: Defaults for the panel's model source. The ViT-Tiny/8 checkpoint is the
 #: primary — it produces the sharp 16×16 feature-grid PCA visualizations.
 #: The resnet18 entry is kept as a backup so an old checkpoint still renders.
-DEFAULT_REPO_ID = "ANONYMOUS/lejepa-vit-tiny-patch8-sentinel2-5band"
-DEFAULT_HUB_FILENAME = "lejepa_vit_tiny_patch8_5band.pt"
+DEFAULT_REPO_ID = "falafel-hockey/lejepa-vit-small-patch8-256-sentinel2-5band"
+DEFAULT_HUB_FILENAME = "lejepa_vit_small_patch8_5band.pt"
 
 #: Local checkpoint search order. First match wins. Ordered by preference
 #: (gold first) so a fresh ViT run transparently overrides a stale ResNet
