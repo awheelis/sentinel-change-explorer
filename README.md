@@ -22,7 +22,7 @@ footprints, roads, and POIs provide ground-truth context.
    - GeoTIFF export of change results
 
 ## Notes
-- First run without cache takes ~30 seconds to boot up
+- First run without cache takes ~45 seconds for fist load
 - If images appear to load black/blank, reload the page
 
 ## Install
