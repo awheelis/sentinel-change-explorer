@@ -152,7 +152,7 @@ and consumes these chips at native resolution without further resizing.
 ```bibtex
 @misc{{sentinel2_lejepa_preset_biased_small,
   title  = {{Sentinel-2 LeJEPA Preset-Biased (Small)}},
-  author = {{Wheelis, Alex}},
+  author = {{Anonymous}},
   year   = {{{build_year}}},
   url    = {{https://huggingface.co/datasets/{repo_id}}}
 }}

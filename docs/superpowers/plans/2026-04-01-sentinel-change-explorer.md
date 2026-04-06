@@ -43,7 +43,7 @@
 - [ ] **Step 1: Create project directory and initialize git**
 
 ```bash
-cd /Users/alex_wheelis/Desktop
+cd .
 mkdir sentinel-change-explorer && cd sentinel-change-explorer
 git init
 mkdir -p src config tests
@@ -93,7 +93,7 @@ cache/
 - [ ] **Step 4: Install dependencies**
 
 ```bash
-cd /Users/alex_wheelis/Desktop/sentinel-change-explorer
+cd .
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -1593,7 +1593,7 @@ git commit -m "docs: add README with install instructions, usage guide, and Phas
 - [ ] **Step 6: Create submission zip**
 
 ```bash
-cd /Users/alex_wheelis/Desktop
+cd .
 zip -r sentinel-change-explorer.zip sentinel-change-explorer/ \
     --exclude "sentinel-change-explorer/.venv/*" \
     --exclude "sentinel-change-explorer/cache/*" \

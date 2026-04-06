@@ -76,7 +76,7 @@ class TestEVI:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_indices.py::TestEVI -v`
+Run: `cd . && python -m pytest tests/unit/test_indices.py::TestEVI -v`
 Expected: ImportError — `compute_evi` does not exist yet.
 
 - [ ] **Step 3: Implement compute_evi**
@@ -111,7 +111,7 @@ def compute_evi(nir: np.ndarray, red: np.ndarray, blue: np.ndarray) -> np.ndarra
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_indices.py::TestEVI -v`
+Run: `cd . && python -m pytest tests/unit/test_indices.py::TestEVI -v`
 Expected: All 5 tests PASS.
 
 - [ ] **Step 5: Register EVI in app.py**
@@ -157,7 +157,7 @@ _INDEX_LABELS = {
 
 - [ ] **Step 6: Run all existing tests to verify no regressions**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All tests PASS.
 
 - [ ] **Step 7: Commit**
@@ -202,7 +202,7 @@ Note: The saturation check is UI-level logic in Streamlit (calls `st.warning`), 
 
 - [ ] **Step 2: Run tests to verify they pass**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_app_logic.py::test_ndvi_saturation_detected tests/unit/test_app_logic.py::test_ndvi_no_saturation -v`
+Run: `cd . && python -m pytest tests/unit/test_app_logic.py::test_ndvi_saturation_detected tests/unit/test_app_logic.py::test_ndvi_no_saturation -v`
 Expected: PASS (these test the condition logic, not the function).
 
 - [ ] **Step 3: Add saturation warning to app.py**
@@ -223,7 +223,7 @@ In `app.py`, after the `delta = compute_change(...)` line (~line 442), and befor
 
 - [ ] **Step 4: Run all unit tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All PASS.
 
 - [ ] **Step 5: Commit**
@@ -283,7 +283,7 @@ class TestAdaptiveThreshold:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_indices.py::TestAdaptiveThreshold -v`
+Run: `cd . && python -m pytest tests/unit/test_indices.py::TestAdaptiveThreshold -v`
 Expected: ImportError — `compute_adaptive_threshold` does not exist.
 
 - [ ] **Step 3: Implement compute_adaptive_threshold**
@@ -345,7 +345,7 @@ def compute_adaptive_threshold(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_indices.py::TestAdaptiveThreshold -v`
+Run: `cd . && python -m pytest tests/unit/test_indices.py::TestAdaptiveThreshold -v`
 Expected: All 4 tests PASS.
 
 - [ ] **Step 5: Add auto-threshold UI to app.py**
@@ -388,7 +388,7 @@ In Panel D, after the stat_cols metrics, add threshold display:
 
 - [ ] **Step 6: Run all unit tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All PASS.
 
 - [ ] **Step 7: Commit**
@@ -420,7 +420,7 @@ def test_default_colormaps_cover_all_indices():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_app_logic.py::test_default_colormaps_cover_all_indices -v`
+Run: `cd . && python -m pytest tests/unit/test_app_logic.py::test_default_colormaps_cover_all_indices -v`
 Expected: ImportError — `DEFAULT_COLORMAPS` does not exist.
 
 - [ ] **Step 3: Add DEFAULT_COLORMAPS and update colormap selector**
@@ -460,12 +460,12 @@ In the sidebar Display section, replace the colormap selectbox with:
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_app_logic.py::test_default_colormaps_cover_all_indices -v`
+Run: `cd . && python -m pytest tests/unit/test_app_logic.py::test_default_colormaps_cover_all_indices -v`
 Expected: PASS.
 
 - [ ] **Step 5: Run all unit tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All PASS.
 
 - [ ] **Step 6: Commit**
@@ -516,7 +516,7 @@ def test_quality_rating_sun_red():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_app_logic.py::test_quality_rating_cloud_green tests/unit/test_app_logic.py::test_quality_rating_cloud_red tests/unit/test_app_logic.py::test_quality_rating_sun_red -v`
+Run: `cd . && python -m pytest tests/unit/test_app_logic.py::test_quality_rating_cloud_green tests/unit/test_app_logic.py::test_quality_rating_cloud_red tests/unit/test_app_logic.py::test_quality_rating_sun_red -v`
 Expected: ImportError — `quality_rating` does not exist.
 
 - [ ] **Step 3: Implement quality_rating function in app.py**
@@ -558,7 +558,7 @@ def quality_rating(
 
 - [ ] **Step 4: Run quality_rating tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/test_app_logic.py -k "quality_rating" -v`
+Run: `cd . && python -m pytest tests/unit/test_app_logic.py -k "quality_rating" -v`
 Expected: All 6 PASS.
 
 - [ ] **Step 5: Extract sun_elevation in sentinel.py**
@@ -637,7 +637,7 @@ In `app.py`, in the Panel D section, after the detail_cols block that shows befo
 
 - [ ] **Step 7: Run all unit tests**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All PASS.
 
 - [ ] **Step 8: Commit**
@@ -653,12 +653,12 @@ git commit -m "feat: add confidence/quality indicator in Panel D"
 
 - [ ] **Step 1: Run full test suite**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -m pytest tests/unit/ -v`
+Run: `cd . && python -m pytest tests/unit/ -v`
 Expected: All tests PASS with no regressions.
 
 - [ ] **Step 2: Verify app imports cleanly**
 
-Run: `cd /Users/alex_wheelis/Desktop/sentinel-change-explorer && python -c "from app import INDEX_FUNCTIONS, DEFAULT_COLORMAPS, quality_rating; print('OK:', list(INDEX_FUNCTIONS.keys()), list(DEFAULT_COLORMAPS.keys()))"`
+Run: `cd . && python -c "from app import INDEX_FUNCTIONS, DEFAULT_COLORMAPS, quality_rating; print('OK:', list(INDEX_FUNCTIONS.keys()), list(DEFAULT_COLORMAPS.keys()))"`
 Expected: `OK: ['ndvi', 'evi', 'ndbi', 'mndwi'] ['ndvi', 'evi', 'ndbi', 'mndwi']`
 
 - [ ] **Step 3: Final commit if any remaining changes**

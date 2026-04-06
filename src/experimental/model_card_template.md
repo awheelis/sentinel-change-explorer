@@ -26,7 +26,7 @@ A small self-supervised feature extractor for Sentinel-2 L2A imagery: a
 2025) on the
 [{dataset_repo_id}](https://huggingface.co/datasets/{dataset_repo_id}) chip
 dataset. Built as the end-to-end reproducibility artifact for the
-[Sentinel Change Explorer](https://github.com/awheelis/sentinel-change-explorer)
+[Sentinel Change Explorer](https://github.com/falafel-hockey/sentinel-change-explorer)
 foundation-model change-detection proof of concept.
 
 **This is a proof of concept, not a general-purpose EO model.** The training
@@ -120,7 +120,7 @@ ckpt_path = hf_hub_download(
 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
 # The encoder factory lives in the companion repo:
-#   git clone https://github.com/awheelis/sentinel-change-explorer
+#   git clone https://github.com/falafel-hockey/sentinel-change-explorer
 #   from src.experimental.encoders import build_encoder
 from src.experimental.encoders import build_encoder
 
@@ -151,7 +151,7 @@ with torch.no_grad():
 ```bibtex
 @misc{{lejepa_{encoder_kind}_sentinel2_5band,
   title  = {{LeJEPA {architecture_name} (5-band Sentinel-2, PoC)}},
-  author = {{Wheelis, Alex}},
+  author = {{Anonymous}},
   year   = {{{build_year}}},
   url    = {{https://huggingface.co/{repo_id}}}
 }}
