@@ -21,6 +21,10 @@ footprints, roads, and POIs provide ground-truth context.
    - Summary statistics (% area changed, scene metadata)
    - GeoTIFF export of change results
 
+## Notes
+- First runs without cache take a couple seconds longer
+- If images appear to load black/blank, reload the page
+
 ## Install
 
 This project uses [uv](https://docs.astral.sh/uv/) for dependency and
@@ -41,7 +45,7 @@ free and open.
 uv run streamlit run app.py
 ```
 
-Then open [http://localhost:8501](http://localhost:8501).
+Then open link as seen in terminal.
 
 ## What to Look At
 
